@@ -15,3 +15,14 @@ build/
 # 4. File rác hệ thống
 .DS_Store
 *.log
+
+# 5. Bỏ qua file của ChatbotServer (Python) ===
+/ChatbotServer/.env
+/ChatbotServer/venv/
+/ChatbotServer/__pycache__/
+/ChatbotServer/.venv/
+/ChatbotServer/*.log
+/ChatbotServer/*.xlsx
+/ChatbotServer/*.parquet
+/ChatbotServer/*.bin
+/ChatbotServer/*.faiss
