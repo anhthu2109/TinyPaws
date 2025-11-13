@@ -1,26 +1,64 @@
-# === Core Web Framework ===
+# # === Core Web Framework ===
+# fastapi==0.115.2
+# uvicorn[standard]==0.30.6
+
+# # === Google Gemini (Generative AI) ===
+# google-generativeai==0.8.3
+
+# # === MongoDB Integration ===
+# pymongo==4.9.1
+
+# # === Data Handling ===
+# pandas==2.2.3
+# numpy==1.26.4
+# openpyxl==3.1.5
+
+# # === RAG Embedding & Semantic Search (CPU faiss) ===
+# faiss-cpu==1.8.0.post1
+
+# # === Environment & Utilities ===
+# python-dotenv==1.0.1
+# tqdm==4.66.5
+
+# # Optional: if you want offline Vietnamese embeddings (only if you plan to use sentence-transformers)
+# # sentence-transformers==2.7.0
+# # torch==2.3.0
+# # torchvision==0.18.0
+
+=== Core Web Framework ===
+
 fastapi==0.115.2
 uvicorn[standard]==0.30.6
 
-# === Google Gemini (Generative AI) ===
+=== Google Gemini (Generative AI) ===
+
 google-generativeai==0.8.3
 
-# === MongoDB Integration ===
+=== MongoDB Integration ===
+
 pymongo==4.9.1
 
-# === Data Handling ===
+=== Data Handling ===
+
 pandas==2.2.3
 numpy==1.26.4
 openpyxl==3.1.5
 
-# === RAG Embedding & Semantic Search (CPU faiss) ===
-faiss-cpu==1.8.0.post1
+=== RAG Embedding & Semantic Search (CPU faiss) ===
 
-# === Environment & Utilities ===
+Sửa ở dòng này: Xóa ==1.8.0.post1 để pip tự tìm bản tương thích
+
+faiss-cpu
+
+=== Environment & Utilities ===
+
 python-dotenv==1.0.1
 tqdm==4.66.5
 
-# Optional: if you want offline Vietnamese embeddings (only if you plan to use sentence-transformers)
-# sentence-transformers==2.7.0
-# torch==2.3.0
-# torchvision==0.18.0
+Optional: if you want offline Vietnamese embeddings (only if you plan to use sentence-transformers)
+
+sentence-transformers==2.7.0
+
+torch==2.3.0
+
+torchvision==0.18.0
