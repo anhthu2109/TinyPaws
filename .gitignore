@@ -1,0 +1,17 @@
+# 1. Chặn tất cả thư viện nặng (ở mọi thư mục con)
+node_modules/
+
+# 2. Chặn file môi trường chứa mật khẩu (ở mọi thư mục con)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 3. Chặn file Build/Dist (khi build React)
+dist/
+build/
+
+# 4. File rác hệ thống
+.DS_Store
+*.log

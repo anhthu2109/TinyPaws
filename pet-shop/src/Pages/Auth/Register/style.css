@@ -1,0 +1,18 @@
+/* Import styles từ Login */
+@import '../Login/style.css';
+
+/* Styles riêng cho Register */
+.register-card {
+    max-width: 500px !important;
+}
+
+.auth-form {
+    gap: 18px !important;
+}
+
+/* Responsive cho Register */
+@media (max-width: 768px) {
+    .register-card {
+        max-width: 100% !important;
+    }
+}

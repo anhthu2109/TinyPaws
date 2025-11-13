@@ -1,0 +1,7 @@
+.banner-item {
+    cursor: pointer;
+}
+
+.banner-item img {
+    transition: transform 0.5s ease;
+}

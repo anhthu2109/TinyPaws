@@ -1,0 +1,188 @@
+@import "tailwindcss";
+
+/* Line clamp utilities */
+.line-clamp-1 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+/* Product description formatting */
+.product-description {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.6;
+}
+
+/* * {
+  margin: 0px;
+  padding: 0px;
+  box-sizing: border-box;
+} */
+
+body {
+  font-family: "Montserrat", sans-serif;
+  font-optical-sizing: auto;
+  background-color: #f2fdf7;
+  color: rgba(0, 0, 0, 0.9);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.container {
+  width: 90%;
+  margin: auto;
+}
+
+header .top-strip {
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.link:hover {
+  color: #ff5252;
+}
+
+.MuiBadge-badge {
+  background-color: #ff5252 !important;
+}
+
+nav ul button {
+  text-transform: capitalize !important;
+}
+
+nav ul button:hover {
+  background: none !important;
+}
+
+.sliderHome {
+  overflow: inherit !important;
+}
+
+.sliderHome {
+  position: relative;
+}
+.sliderHome .swiper-button-prev,
+.sliderHome .swiper-button-next {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60; 
+  background: #fff;
+  color: #013b22;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  border-radius: 100%;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+}
+
+.sliderHome .swiper-button-prev::after,
+.sliderHome .swiper-button-next::after {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.sliderHome .swiper-button-prev svg,
+.sliderHome .swiper-button-next svg {
+  height: 30px;
+}
+
+/* Pagination bullets for sliderHome */
+.sliderHome .swiper-pagination {
+  bottom: 20px !important;
+  z-index: 50;
+}
+
+.sliderHome .swiper-pagination-bullet {
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  opacity: 0.6;
+  transition: all 0.3s ease;
+}
+
+.sliderHome .swiper-pagination-bullet-active {
+  background: #013b22;
+  opacity: 1;
+  width: 32px;
+  border-radius: 6px;
+}
+
+/* ProductSwiper buttons - Same style as sliderHome */
+.productSwiper .swiper-button-prev,
+.productSwiper .swiper-button-next {
+  position: absolute !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 60 !important;
+  background: #fff !important;
+  color: #013b22 !important;
+  width: 48px !important;
+  height: 48px !important;
+  min-width: 48px !important;
+  border-radius: 100% !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+}
+
+.productSwiper .swiper-button-prev::after,
+.productSwiper .swiper-button-next::after {
+  font-size: 14px !important;
+  font-weight: bold !important;
+}
+
+.productSwiper .swiper-button-prev svg,
+.productSwiper .swiper-button-next svg {
+  width: 50% !important;
+  height: 50% !important;
+}
+
+.productSwiper .swiper-button-prev:hover,
+.productSwiper .swiper-button-next:hover {
+  background: #ff5252 !important;
+  color: #fff !important;
+}
+
+/* Category Panel z-index fix */
+.categoryPanel {
+  z-index: 200000 !important;
+}
+
+.MuiDrawer-root {
+  z-index: 200000 !important;
+}
+
+.MuiDrawer-paper {
+  z-index: 200000 !important;
+}
+
+/* User Menu z-index fix */
+.MuiMenu-root {
+  z-index: 300000 !important;
+}
+
+.MuiMenu-paper {
+  z-index: 300000 !important;
+}
+
+.MuiPopover-root {
+  z-index: 300000 !important;
+}

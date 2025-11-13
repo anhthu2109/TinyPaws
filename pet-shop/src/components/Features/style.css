@@ -1,0 +1,11 @@
+.feature-item {
+    transition: all 0.3s ease;
+}
+
+.feature-item:hover {
+    transform: translateY(-3px);
+}
+
+.feature-item .icon {
+    flex-shrink: 0;
+}
