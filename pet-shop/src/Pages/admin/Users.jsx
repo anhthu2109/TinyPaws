@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FaSearch, FaEye, FaTrash } from 'react-icons/fa';
 import axios from 'axios';
-import CONFIG from '../../config';
+import { CONFIG } from '../../constants/config';
 
 // API Base URL
 const API_URL = `${CONFIG.API.BASE_URL}/api`;
