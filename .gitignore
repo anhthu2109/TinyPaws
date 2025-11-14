@@ -22,7 +22,6 @@ build/
 /ChatbotServer/__pycache__/
 /ChatbotServer/.venv/
 /ChatbotServer/*.log
-/ChatbotServer/*.xlsx
 /ChatbotServer/*.parquet
 /ChatbotServer/*.bin
 /ChatbotServer/*.faiss
