@@ -167,7 +167,7 @@ class ShopRAGMongo:
             
         print("ShopRAG sẵn sàng!")
         
-        # === SỬA LỖI "is not None" ===
+        # === SỬA LỖI "is not None" (DÒNG 171) ===
         if start_watcher and self.db_collection is not None:
             self.start_change_stream_watcher()
 
