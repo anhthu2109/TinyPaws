@@ -139,39 +139,51 @@ class PetChatRAG:
     def generate_answer(self, query, relevant_data):
         context = "\n".join(relevant_data["answers"].tolist())
         prompt = f"""
-        Bạn là trợ lý AI thông minh của TinyPaws - chuyên gia chăm sóc thú cưng.
+        Bạn là trợ lý AI chuyên về Thú Cưng (TinyPaws).
         
-        Nhiệm vụ: Trả lời câu hỏi của người dùng một cách hữu ích và chính xác.
+        Nhiệm vụ: Trả lời câu hỏi dựa trên thông tin tham khảo.
         
-        Thông tin tham khảo từ dữ liệu nội bộ:
+        QUY TẮC AN TOÀN (QUAN TRỌNG):
+        1. KIỂM TRA ĐỐI TƯỢNG: 
+           - Nếu câu hỏi dùng chủ ngữ là con người (ví dụ: "tôi bị...", "chân tôi", "con tôi", "người yêu"...), hãy TỪ CHỐI TRẢ LỜI NGAY.
+           - Chỉ nói ngắn gọn: "TinyPaws chỉ chuyên tư vấn sức khỏe cho chó mèo thôi ạ, sen đi khám bác sĩ người nha! 🐾".
+           - TUYỆT ĐỐI KHÔNG đưa ra lời khuyên y tế cho người (kể cả khi bạn biết).
+           
+        2. CHỈ TRẢ LỜI KHI: Câu hỏi liên quan đến chó, mèo, thú cưng.
+        
+        Thông tin tham khảo (Dành cho thú cưng):
         {context}
-        
-        Câu hỏi của người dùng: {query}
-        
-        Hướng dẫn trả lời:
-        1. Ưu tiên sử dụng "Thông tin tham khảo" để trả lời.
-        2. Nếu thông tin tham khảo không đủ để trả lời hết ý, hãy DÙNG KIẾN THỨC CHUYÊN GIA của bạn để bổ sung, nhưng phải đảm bảo an toàn và đúng khoa học.
-        3. Giọng văn thân thiện, dễ thương (dùng các từ như "Sen", "Boss" nếu phù hợp), có emoji.
+
+        Câu hỏi: {query}
         """
         return self.llm_generate_with_retry(prompt)
 
-    # === Chat với kiểm tra Out-of-Domain ===
+    # === Chat (Đã sửa để nhận diện Chào hỏi xã giao) ===
     def chat(self, query, k=3):
         start = time.time()
+        
+        # Tìm kiếm dữ liệu liên quan
         relevant, scores = self.find_relevant_answers(query, k)
 
         max_sim = max(scores) if len(scores) else 0.0
         print(f"Max similarity = {max_sim:.3f} (threshold = {self.similarity_threshold})")
 
-        # Bộ từ khóa nhận diện câu hỏi về thú cưng
+        query_lower = query.lower()
+
+        # 1. Từ khóa chuyên môn (Giữ nguyên)
         PET_KEYWORDS = ["chó", "cho", "cún", "mèo", "meo", "pet", "thú cưng",
                         "rối loạn", "bệnh", "chăm sóc", "ăn", "thức ăn", "khẩu phần",
                         "tắm", "spa", "sức khỏe", "huấn luyện", "khám", "chó con"]
+        is_pet_query = any(kw in query_lower for kw in PET_KEYWORDS)
 
-        is_pet_query = any(kw in query.lower() for kw in PET_KEYWORDS)
+        # 2. THÊM MỚI: Từ khóa chào hỏi / Xã giao
+        GREETING_KEYWORDS = ["hi", "hello", "chào", "alo", "ơi", "shop", "ad", "admin", "bot", "giúp", "hú", "bạn ơi"]
+        is_greeting = any(kw in query_lower for kw in GREETING_KEYWORDS)
 
-        # Nếu không liên quan thú cưng hoặc similarity quá thấp → từ chối
-        if not is_pet_query or max_sim < self.similarity_threshold:
+        # 3. LOGIC CHẶN (Sửa lại điều kiện lọc)
+        # Chặn nếu: (Không phải từ khóa Pet VÀ Không phải chào hỏi)
+        # HOẶC: (Điểm similarity thấp VÀ Không phải chào hỏi)
+        if (not is_pet_query and not is_greeting) or (max_sim < self.similarity_threshold and not is_greeting):
             return {
                 "response": "TinyPaws chỉ hỗ trợ các vấn đề về thú cưng. "
                             "Bạn có thể hỏi về chăm sóc chó mèo nhé!",
@@ -180,9 +192,23 @@ class PetChatRAG:
                 "max_similarity": round(max_sim, 3)
             }
 
-        # Nếu hợp lệ → tạo câu trả lời từ knowledge base
-        answer = self.generate_answer(query, relevant)
-        docs = relevant[["question", "answers"]].replace({np.nan: None}).to_dict("records")
+        # 4. XỬ LÝ TRẢ LỜI
+        # Trường hợp A: Chỉ là câu chào hỏi xã giao (Điểm thấp, không tìm thấy dữ liệu y tế)
+        if is_greeting and max_sim < self.similarity_threshold:
+            prompt = f"""
+            Người dùng nói: "{query}"
+            Bạn là chuyên gia chăm sóc thú cưng (AI) của TinyPaws.
+            Hãy chào lại người dùng một cách thân thiện, ngắn gọn, dùng emoji 🐾.
+            Gợi ý họ có thể hỏi về: sức khỏe, dinh dưỡng, hoặc cách huấn luyện chó mèo.
+            """
+            answer = self.llm_generate_with_retry(prompt)
+            docs = []
+
+        # Trường hợp B: Có nội dung chuyên môn (Điểm cao hoặc có từ khóa Pet)
+        else:
+            # Dùng hàm generate_answer có sẵn để trả lời dựa trên Knowledge Base
+            answer = self.generate_answer(query, relevant)
+            docs = relevant[["question", "answers"]].replace({np.nan: None}).to_dict("records")
 
         return {
             "response": answer,

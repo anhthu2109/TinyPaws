@@ -312,78 +312,85 @@ class ShopRAGMongo:
         return self.llm_generate_with_retry(prompt, max_retries=2)
 
     # === Chat (có Bộ Lọc Cứng - Hard Filter) ===
+    # === Chat (Đã thêm logic Chào hỏi & Bộ lọc cứng) ===
     def chat(self, query, k=8):
         start = time.time()
         
-        # 1. Tìm kiếm rộng (k=8) để lấy đủ thứ có thể liên quan
+        # 1. Tìm kiếm rộng (k=8)
         relevant, scores = self.find_relevant_products(query, k)
         
         max_score = 0.0
         if len(scores) > 0:
             max_score = max(scores)
 
+        query_lower = query.lower()
+
+        # --- LOGIC MỚI: KIỂM TRA CÂU CHÀO HỎI ---
+        # Danh sách các từ xã giao thường gặp
+        GREETING_KEYWORDS = ["hi", "hello", "chào", "alo", "ơi", "shop", "ad", "admin", "bạn ơi", "bot", "là ai", "giúp"]
+        is_greeting = any(kw in query_lower for kw in GREETING_KEYWORDS)
+        # ----------------------------------------
+
         # -------------------------------------------------------
         # BƯỚC 2: LOGIC LỌC CỨNG (QUAN TRỌNG NHẤT)
         # -------------------------------------------------------
         if not relevant.empty:
-            query_lower = query.lower()
             target_category = None
 
-            # Định nghĩa từ khóa để bắt dính nhu cầu
-            # Key = Từ khách nói | Value = Tên Danh Mục trong DB (phải khớp chính xác chữ trong cột full_text "Loại: ...")
+            # Định nghĩa từ khóa phân loại
             keyword_rules = {
-                "thức ăn": "Thức ăn",
-                "đồ ăn": "Thức ăn",
-                "hạt": "Thức ăn",
-                "pate": "Thức ăn",
-                "bánh thưởng": "Thức ăn",
-                
-                "đồ chơi": "Đồ chơi",
-                "thú bông": "Đồ chơi",
-                "bóng": "Đồ chơi",
-                
-                "phụ kiện": "Phụ kiện",
-                "bát": "Phụ kiện",
-                "dây dắt": "Phụ kiện",
-                "vòng cổ": "Phụ kiện",
-                "túi": "Phụ kiện",
-                
-                "vệ sinh": "Vệ sinh",
-                "tắm": "Vệ sinh",
-                "cát": "Vệ sinh"
+                "thức ăn": "Thức ăn", "đồ ăn": "Thức ăn", "hạt": "Thức ăn", "pate": "Thức ăn", "bánh thưởng": "Thức ăn",
+                "đồ chơi": "Đồ chơi", "thú bông": "Đồ chơi", "bóng": "Đồ chơi",
+                "phụ kiện": "Phụ kiện", "bát": "Phụ kiện", "dây dắt": "Phụ kiện", "vòng cổ": "Phụ kiện", "túi": "Phụ kiện",
+                "vệ sinh": "Vệ sinh", "tắm": "Vệ sinh", "cát": "Vệ sinh"
             }
 
-            # Kiểm tra xem khách có nhắc đến từ khóa nào không
             for kw, cat_name in keyword_rules.items():
                 if kw in query_lower:
                     target_category = cat_name
-                    break # Tìm thấy cái đầu tiên là chốt luôn (Ưu tiên)
+                    break 
 
-            # Nếu xác định được danh mục, tiến hành LỌC
             if target_category:
                 print(f"--> Phát hiện nhu cầu: {target_category}. Đang lọc dữ liệu...")
-                
-                # Lọc: Chỉ giữ lại dòng mà cột full_text có chứa "Loại: Thức ăn" (ví dụ)
-                # Lưu ý: Cần đảm bảo trong full_text bạn đã map đúng tên danh mục "Thức ăn", "Phụ kiện"...
                 filtered_relevant = relevant[relevant["full_text"].str.contains(f"Loại: {target_category}", case=False, na=False)]
                 
-                # Nếu lọc xong mà vẫn còn hàng -> Gán lại vào biến relevant
                 if not filtered_relevant.empty:
                     relevant = filtered_relevant
                     print(f"--> Đã lọc còn {len(relevant)} sản phẩm đúng loại.")
                 else:
-                    print("--> Lọc xong không còn gì (có thể do tên danh mục không khớp), quay về dùng danh sách gốc.")
+                    print("--> Lọc xong không còn gì, quay về dùng danh sách gốc.")
         # -------------------------------------------------------
 
         print(f"Max similarity (shop) = {max_score:.3f}")
 
+        # === QUYẾT ĐỊNH TRẢ LỜI ===
+        # Trường hợp 1: Không tìm thấy sản phẩm VÀ điểm thấp
         if relevant.empty or max_score < self.similarity_threshold:
-            answer = "Xin lỗi, tôi không tìm thấy sản phẩm phù hợp. Bạn thử hỏi cụ thể hơn xem sao?"
-            docs = []
-        else:
-            # Gọi hàm generate_answer (đã tối ưu cắt ngắn text ở bước trước)
-            answer = self.generate_answer(query, relevant)
             
+            # NẾU LÀ CÂU CHÀO HỎI -> Vẫn trả lời (Bypass ngưỡng điểm)
+            if is_greeting:
+                print("--> Phát hiện câu chào hỏi. Trả lời xã giao.")
+                greeting_prompt = f"""
+                Người dùng nói: "{query}"
+                Bạn là trợ lý ảo của TinyPaws. Hãy chào lại khách hàng một cách thân thiện, dễ thương (dùng icon 🐾, 🐱).
+                Giới thiệu ngắn gọn bạn có thể giúp họ tìm thức ăn, phụ kiện, hoặc đồ chơi cho thú cưng.
+                """
+                return {
+                    "response": self.llm_generate_with_retry(greeting_prompt), # Gọi AI trả lời chào
+                    "sources": [],
+                    "processing_time": round(time.time() - start, 2),
+                    "max_similarity": float(max_score)
+                }
+            
+            # NẾU KHÔNG PHẢI CHÀO -> Báo lỗi không tìm thấy
+            else:
+                answer = "Xin lỗi, tôi không tìm thấy sản phẩm phù hợp. Bạn thử hỏi cụ thể hơn về thức ăn, đồ chơi hay phụ kiện nhé?"
+                docs = []
+        
+        # Trường hợp 2: Tìm thấy sản phẩm (Điểm cao)
+        else:
+            # Gọi hàm generate_answer bình thường
+            answer = self.generate_answer(query, relevant)
             docs = relevant[["name", "description", "price", "stock_quantity"]].replace({np.nan: None}).to_dict("records")
 
         return {
