@@ -3,8 +3,9 @@ import { useParams, Link } from 'react-router-dom';
 import { FaCalendar, FaUser, FaClock, FaArrowLeft, FaSpinner, FaSearch } from 'react-icons/fa';
 import axios from 'axios';
 import './style.css';
+import { CONFIG } from '../../constants/config';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "/api";
+const API_BASE_URL = CONFIG.API.BASE_URL;
 
 const BlogDetail = () => {
     const { id } = useParams();
@@ -21,7 +22,7 @@ const BlogDetail = () => {
     const fetchBlogDetail = async () => {
         try {
             setLoading(true);
-            const response = await axios.get(`${API_BASE_URL}/blogs/${id}`);
+            const response = await axios.get(`${API_BASE_URL}/api/blogs/${id}`);
             
             if (response.data.success) {
                 setBlog(response.data.data.blog);

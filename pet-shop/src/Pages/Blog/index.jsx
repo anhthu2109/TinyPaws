@@ -4,8 +4,9 @@ import { FaCalendar, FaUser, FaComment, FaArrowRight } from 'react-icons/fa';
 import { Button } from '@mui/material';
 import axios from 'axios';
 import './style.css';
+import { CONFIG } from '../../constants/config';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "/api";
+const API_BASE_URL = CONFIG.API.BASE_URL;
 
 const Blog = () => {
     const navigate = useNavigate();
@@ -40,7 +41,7 @@ const Blog = () => {
                 console.log('🏷️ Filtering by tag:', selectedTag);
             }
             
-            const response = await axios.get(`${API_BASE_URL}/blogs?${params.toString()}`);
+            const response = await axios.get(`${API_BASE_URL}/api/blogs?${params.toString()}`);
             
             if (response.data.success) {
                 setBlogPosts(response.data.data.blogs);

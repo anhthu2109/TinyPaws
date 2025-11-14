@@ -27,7 +27,7 @@ const OrderHistory = () => {
                 return;
             }
 
-            const response = await fetch(`${API_BASE_URL}/orders/user/${user?.id || user?._id}`, {
+            const response = await fetch(`${API_BASE_URL}/api/orders/user/${user?.id || user?._id}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'

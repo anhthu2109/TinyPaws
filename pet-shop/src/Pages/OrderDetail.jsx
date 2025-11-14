@@ -41,7 +41,7 @@ const OrderDetail = () => {
       setOrder(null);
 
       try {
-        const response = await fetch(`${API_BASE_URL}/orders/${id}`, {
+        const response = await fetch(`${API_BASE_URL}/api/orders/${id}`, {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
