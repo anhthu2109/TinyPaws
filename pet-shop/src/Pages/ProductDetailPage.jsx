@@ -9,6 +9,7 @@ import RelatedProducts from '../components/RelatedProducts';
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/thumbs';
+import CONFIG from '../../config';
 
 const ProductDetailPage = () => {
     const { id } = useParams();
@@ -27,7 +28,7 @@ const ProductDetailPage = () => {
     const fetchProduct = async () => {
         try {
             setLoading(true);
-            const response = await axios.get(`http://localhost:8000/api/products/${id}`);
+            const response = await axios.get(`${CONFIG.API.BASE_URL}/api/products/${id}`);
             
             if (response.data.success) {
                 setProduct(response.data.data);

@@ -1,12 +1,22 @@
 # -*- coding: utf-8 -*-
 import os
 import time
-import threading
-import pandas as pd
-import numpy as np
-from pymongo import MongoClient
 import faiss
+import numpy as np
+import pandas as pd
 import google.generativeai as genai
+import unicodedata
+from pymongo import MongoClient, errors
+from threading import Thread
+
+# === SỬA LỖI ĐƯỜNG DẪN ===
+# Lấy đường dẫn tuyệt đối của thư mục chứa file này
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Định nghĩa đường dẫn cache dựa trên BASE_DIR
+SHOP_INDEX_PATH = os.path.join(BASE_DIR, "shop_faiss.bin")
+SHOP_DATA_PATH = os.path.join(BASE_DIR, "shop_cache.parquet")
+# ========================
 
 
 class ShopRAGMongo:
@@ -15,220 +25,246 @@ class ShopRAGMongo:
         self.mongo_uri = mongo_uri
         self.db_name = db_name
         self.collection_name = collection
-
-        # Kết nối MongoDB
-        self.client = MongoClient(mongo_uri)
-        self.db = self.client[db_name]
-        self.collection = self.db[collection]
-
-        # Cấu hình Gemini API
-        genai.configure(api_key=self.api_key)
-        self.embedding_model = "models/text-embedding-004"
-        self.llm_model = genai.GenerativeModel("models/gemini-2.0-flash")
-
-        # Biến lưu trữ dữ liệu
-        self.data = None
+        self.embedding_model_name = "models/text-embedding-004"
+        self.df = pd.DataFrame()
         self.index = None
-        self.watch_thread = None
+        self.llm_model = None
+        self.db_client = None
+        self.db_collection = None
+        self.embedding_dimension = 768 # Default
+        self.similarity_threshold = 0.55
 
-    # === 1. LOAD DATA TỪ MONGODB ===
-    def load_data(self):
-        docs = list(self.collection.find(
-            {}, {"name": 1, "description": 1, "price": 1, "stock_quantity": 1}
-        ))
-
-        if not docs:
-            print("MongoDB chưa có sản phẩm nào.")
-            self.data = pd.DataFrame()
-            return
-
-        df = pd.DataFrame(docs)
-        df["_id"] = df["_id"].astype(str)
-        df["combined"] = df.apply(
-            lambda x: f"{x.get('name', '')}. {x.get('description', '')}. Giá: {x.get('price', '')}đ.",
-            axis=1,
-        )
-        self.data = df
-        print(f"Loaded {len(df)} sản phẩm từ MongoDB.")
-
-    # === 2️. KIỂM TRA REPLICA SET/ATLAS CLUSTER ===
-    def supports_change_streams(self):
+        genai.configure(api_key=self.api_key)
+        self.llm_model = genai.GenerativeModel("models/gemini-2.0-flash")
+        
         try:
-            info = self.client.admin.command("hello")
-            return bool(info.get("setName"))  # chỉ true nếu replica set / Atlas
+            self.db_client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
+            self.db_client.server_info() # Test connection
+            self.db_collection = self.db_client[db_name][collection]
+            print(f"Kết nối MongoDB thành công: {db_name}.{collection}")
+        except errors.ServerSelectionTimeoutError as err:
+            print(f"Lỗi kết nối MongoDB: {err}")
+            self.db_client = None
+            self.db_collection = None
         except Exception as e:
-            print(f"Không thể kiểm tra Change Stream support: {e}")
-            return False
+            print(f"Lỗi MongoDB không xác định: {e}")
+            self.db_client = None
+            self.db_collection = None
 
-    # === 3️. LẤY EMBEDDING TỪ GEMINI ===
+    # === Load data from MongoDB ===
+    def load_data(self):
+        if not self.db_collection:
+            print("Bỏ qua load data, không có kết nối MongoDB.")
+            return False
+            
+        try:
+            cursor = self.db_collection.find({}, {"name": 1, "description": 1, "price": 1, "stock": 1, "category": 1})
+            products = list(cursor)
+            if not products:
+                 print("Không tìm thấy sản phẩm nào trong MongoDB.")
+                 self.df = pd.DataFrame(columns=["_id", "name", "description", "price", "stock", "category", "full_text"])
+                 return True # Vẫn thành công nhưng là df rỗng
+
+            self.df = pd.DataFrame(products)
+            self.df["_id"] = self.df["_id"].astype(str)
+            
+            # (Giữ nguyên phần chuẩn hóa ...)
+            self.df["full_text"] = self.df.apply(
+                lambda row: f"Tên: {row['name']}. Mô tả: {row.get('description', '')}. Giá: {row.get('price', 0)} VND. Tồn kho: {row.get('stock', 0)}",
+                axis=1
+            )
+            
+            print(f"Loaded {len(self.df)} sản phẩm từ MongoDB.")
+            return True
+        except Exception as e:
+            print(f"Lỗi load data từ MongoDB: {e}")
+            return False
+    
+    # === Embedding ===
     def get_embedding(self, text):
         try:
-            result = genai.embed_content(
-                model=self.embedding_model,
-                content=text
-            )
+            result = genai.embed_content(model=self.embedding_model_name, content=text)
             return result["embedding"]
         except Exception as e:
-            print(f"Lỗi lấy embedding: {e}")
+            print(f"Error getting embedding: {e}")
             return None
 
-    # === 4️. TẠO EMBEDDING CHO TOÀN BỘ DATA (CÓ RATE LIMIT) ===
-    def create_embeddings_for_data(self):
-        if self.data is None or self.data.empty:
-            return
+    # === Retry wrapper for LLM ===
+    def llm_generate_with_retry(self, prompt, max_retries=3, backoff=2.0):
+        for attempt in range(max_retries):
+            try:
+                response = self.llm_model.generate_content(prompt)
+                return response.text
+            except Exception as e:
+                print(f"Lỗi LLM (lần {attempt+1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(backoff * (attempt + 1))
+        return "Xin lỗi, tôi tạm thời không thể trả lời lúc này."
 
-        print("Đang tạo embeddings cho sản phẩm...")
-        embeddings = []
-        for text in self.data["combined"].tolist():
-            emb = self.get_embedding(text)
-            embeddings.append(emb)
-            time.sleep(0.05)  # tránh rate limit Gemini
-        self.data["embedding"] = embeddings
-        self.data.dropna(subset=["embedding"], inplace=True)
 
-    # === 5️. XÂY DỰNG FAISS INDEX ===
+    # === Build FAISS index (Cosine) ===
     def build_index(self):
-        if self.data is None or self.data.empty:
-            print("Không có dữ liệu để tạo index.")
+        print("Đang tạo embeddings cho sản phẩm...")
+        if self.df.empty or 'full_text' not in self.df.columns:
+            print("DataFrame rỗng, không thể build index.")
+            self.index = faiss.IndexFlatIP(self.embedding_dimension) # Tạo index rỗng
             return
 
-        if "embedding" not in self.data.columns or self.data["embedding"].isnull().any():
-            self.create_embeddings_for_data()
+        self.df["embedding"] = (
+            self.df["full_text"].astype(str).apply(self.get_embedding)
+        )
+        self.df.dropna(subset=["embedding"], inplace=True)
 
-        embeddings = np.array(self.data["embedding"].tolist(), dtype="float32")
-        if embeddings.size == 0:
-            print("Không có embedding hợp lệ.")
+        if self.df.empty:
+            print("Không có embedding nào được tạo, index sẽ rỗng.")
+            self.index = faiss.IndexFlatIP(self.embedding_dimension) # Tạo index rỗng
             return
 
-        dim = embeddings.shape[1]
+        embeddings = np.array(self.df["embedding"].tolist()).astype("float32")
         faiss.normalize_L2(embeddings)
-        self.index = faiss.IndexFlatIP(dim)
-        self.index.add(embeddings)
-        print(f"FAISS index được tạo với {len(self.data)} sản phẩm.")
+        self.embedding_dimension = embeddings.shape[1]
 
-    # === 6️. CACHE INDEX & DATA ===
-    def save_cache(self, index_path="shop_faiss.bin", data_path="shop_cache.parquet"):
+        self.index = faiss.IndexFlatIP(self.embedding_dimension)
+        self.index.add(embeddings)
+        print(f"FAISS index được tạo với {len(self.df)} sản phẩm.")
+
+    # === Cache ===
+    def save_cache(self, index_path=SHOP_INDEX_PATH, data_path=SHOP_DATA_PATH): # Sử dụng đường dẫn mới
         try:
-            if self.index is not None:
+            if self.index:
                 faiss.write_index(self.index, index_path)
-            if self.data is not None:
-                self.data.to_parquet(data_path, index=False)
-            print("Shop cache saved.")
+            if not self.df.empty:
+                self.df.to_parquet(data_path, index=False, engine='pyarrow')
+            print(f"Cache shop đã lưu: {index_path}, {data_path}")
         except Exception as e:
             print(f"Lỗi lưu cache: {e}")
 
-    def load_cache(self, index_path="shop_faiss.bin", data_path="shop_cache.parquet"):
+    def load_cache(self, index_path=SHOP_INDEX_PATH, data_path=SHOP_DATA_PATH): # Sử dụng đường dẫn mới
         try:
             if os.path.exists(index_path) and os.path.exists(data_path):
                 self.index = faiss.read_index(index_path)
-                self.data = pd.read_parquet(data_path)
-                print("Shop cache loaded.")
+                self.df = pd.read_parquet(data_path, engine='pyarrow') # Thêm engine
+                self.embedding_dimension = self.index.d
+                print(f"Cache shop đã tải ({len(self.df)} sản phẩm).")
                 return True
+            print("Không tìm thấy cache shop, sẽ build lại từ MongoDB.")
             return False
         except Exception as e:
-            print(f"Lỗi load cache: {e}")
+            print(f"Lỗi tải cache shop: {e}")
             return False
 
-    # === 7️. TÌM SẢN PHẨM LIÊN QUAN ===
-    def search_products(self, query, k=3):
-        if self.index is None:
-            return pd.DataFrame()
+    # === Setup ===
+    def setup(self, start_watcher=False):
+        print("Đang khởi tạo ShopRAG...")
+        if self.load_cache():
+            print("ShopRAG đã tải từ cache!")
+        else:
+            if not self.load_data():
+                print("Không thể tải data shop. Bỏ qua build index.")
+                self.index = faiss.IndexFlatIP(self.embedding_dimension) # Khởi tạo index rỗng
+            else:
+                self.build_index()
+                self.save_cache()
+            
+        print("ShopRAG sẵn sàng!")
+        
+        if start_watcher and self.db_collection:
+            self.start_change_stream_watcher()
+    
+    # === Retrieval ===
+    def find_relevant_products(self, query, k=3):
+        query_emb = self.get_embedding(query)
+        if query_emb is None:
+            return pd.DataFrame(), []
 
-        q_emb = self.get_embedding(query)
-        if q_emb is None:
-            return pd.DataFrame()
-
-        q_vec = np.array([q_emb], dtype="float32")
+        q_vec = np.array([query_emb], dtype="float32")
         faiss.normalize_L2(q_vec)
+
+        if not self.index or self.index.ntotal == 0:
+             print("Index (shop) rỗng, không thể tìm kiếm.")
+             return pd.DataFrame(), []
+             
         D, I = self.index.search(q_vec, k)
-        return self.data.iloc[I[0]]
+        return self.df.iloc[I[0]], D[0]
 
-    # === 8️. CHATBOT TRẢ LỜI NGƯỜI DÙNG ===
-    def chat(self, query):
-        start_time = time.time()
-        results = self.search_products(query)
+    # === Generation ===
+    def generate_answer(self, query, relevant_data):
+        if relevant_data.empty:
+             return self.llm_generate_with_retry(f"Bạn là trợ lý mua sắm của TinyPaws. Hãy trả lời câu hỏi của khách: {query}. (Lưu ý: không tìm thấy sản phẩm liên quan, hãy trả lời chung về shop).")
 
-        if results.empty:
-            return {"response": "Xin lỗi, hiện tôi chưa có thông tin phù hợp.", "sources": []}
-
-        # Tạo context mô tả sản phẩm
-        context = "\n".join(
-            [f"* {r['name']}: {r['description']} (Giá: {r['price']}đ)" for _, r in results.iterrows()]
-        )
-
-        # Prompt hướng dẫn Gemini
+        context = "\n".join(relevant_data["full_text"].tolist())
         prompt = f"""
-        Bạn là trợ lý bán hàng TinyPaws. Dưới đây là thông tin các sản phẩm KHẢ DỤNG (dựa trên dữ liệu cửa hàng). 
-        *Bạn chỉ được sử dụng chính xác thông tin dưới đây để trả lời. KHÔNG được thêm/bịa đặt thông tin về hàng tồn kho, mẫu, giá, hay dịch vụ nếu không có trong danh sách.* 
+        Bạn là trợ lý mua sắm của TinyPaws.
+        Trả lời câu hỏi của khách hàng chỉ dựa vào thông tin sản phẩm tham khảo.
 
-        Sản phẩm liên quan:
+        Câu hỏi: {query}
+        Thông tin sản phẩm:
         {context}
 
-        Câu hỏi: "{query}"
-
-        Hãy trả lời ngắn gọn, nếu không có thông tin xác thực thì trả lời: 
-        "Xin lỗi, hiện TinyPaws không có thông tin đó. Bạn có muốn mình kiểm tra hoặc giới thiệu sản phẩm tương tự không?"
+        Hãy trả lời thân thiện, tập trung vào sản phẩm, giá cả, và tồn kho.
         """
+        return self.llm_generate_with_retry(prompt)
 
-        # Sinh phản hồi từ LLM
-        try:
-            response = self.llm_model.generate_content(prompt)
-            answer = response.text.strip()
-        except Exception as e:
-            answer = f"Xin lỗi, tôi không thể tạo câu trả lời lúc này. ({e})"
+    # === Chat ===
+    def chat(self, query, k=3):
+        start = time.time()
+        relevant, scores = self.find_relevant_products(query, k)
 
-        # === Làm sạch dữ liệu JSON-safe ===
-        results = results.copy()
-        if "_id" in results.columns:
-            results["_id"] = results["_id"].astype(str)
-        if "embedding" in results.columns:
-            results = results.drop(columns=["embedding"])
+        max_score = 0.0
+        if len(scores) > 0:
+            max_score = max(scores)
 
-        safe_results = []
-        for _, row in results.iterrows():
-            clean_row = {}
-            for k, v in row.items():
-                if isinstance(v, (np.generic, np.float32, np.int32, np.int64)):
-                    clean_row[k] = v.item()
-                elif isinstance(v, (list, np.ndarray)):
-                    clean_row[k] = [float(x) for x in v]
-                else:
-                    clean_row[k] = v
-            safe_results.append(clean_row)
+        print(f"Max similarity (shop) = {max_score:.3f} (threshold = {self.similarity_threshold})")
+
+        if relevant.empty or max_score < self.similarity_threshold:
+            answer = "Xin lỗi, tôi không tìm thấy sản phẩm phù hợp với câu hỏi của bạn. Bạn có thể hỏi về chó, mèo, hoặc các sản phẩm khác không?"
+            docs = []
+        else:
+            answer = self.generate_answer(query, relevant)
+            docs = relevant[["name", "description", "price", "stock"]].replace({np.nan: None}).to_dict("records")
 
         return {
             "response": answer,
-            "sources": safe_results,
-            "processing_time": round(float(time.time() - start_time), 2),
+            "sources": docs,
+            "processing_time": round(time.time() - start, 2),
+            "max_similarity": float(max_score)
         }
-
-    # === 9️.AUTO-WATCH MONGODB (Chỉ dùng nếu ReplicaSet/Atlas) ===
-    def watch_for_changes(self):
-        print("Theo dõi thay đổi MongoDB (auto reload)...")
-        try:
-            with self.collection.watch() as stream:
-                for change in stream:
-                    print(f"Phát hiện thay đổi: {change['operationType']}")
-                    self.reload_index()
-        except Exception as e:
-            print(f"Lỗi trong watch_for_changes: {e}")
-
+        
+    # === Real-time watcher ===
     def reload_index(self):
-        print("Đang cập nhật dữ liệu và FAISS index...")
-        self.load_data()
-        self.build_index()
-        print("Dữ liệu & index đã được cập nhật!")
-
-    # === 10. KHỞI TẠO HỆ THỐNG ===
-    def setup(self, start_watcher=True):
-        if not self.load_cache():
-            self.load_data()
+        """Hàm này được gọi khi có thay đổi trong DB"""
+        print(" Phát hiện thay đổi MongoDB! Đang build lại index...")
+        if self.load_data():
             self.build_index()
             self.save_cache()
+            print("Index shop đã được cập nhật.")
+        
+    def start_change_stream_watcher(self):
+        print(" Theo dõi thay đổi MongoDB (auto reload)...")
+        if not self.db_collection:
+             print("Không thể theo dõi, chưa kết nối MongoDB.")
+             return
 
-        if start_watcher and self.supports_change_streams():
-            self.watch_thread = threading.Thread(target=self.watch_for_changes, daemon=True)
-            self.watch_thread.start()
-            print("Watcher thread started (Change Stream supported).")
-        else:
-            print("Change Stream not supported or watcher disabled.")
+        try:
+            # Kiểm tra xem Change Streams có được hỗ trợ không
+            self.db_client.admin.command('hello')
+            print("Change Streams được hỗ trợ.")
+        except Exception as e:
+            print(f"Change Streams không được hỗ trợ (chỉ có trên cluster M0+): {e}. Tắt auto-reload.")
+            return
+
+        def watch_changes():
+            try:
+                with self.db_collection.watch(full_document='updateLookup') as stream:
+                    for change in stream:
+                        print(f"MongoDB change detected: {change['operationType']}")
+                        # Đơn giản là build lại mọi thứ khi có thay đổi
+                        if change['operationType'] in ['insert', 'update', 'replace', 'delete']:
+                            self.reload_index()
+            except Exception as e:
+                print(f"Lỗi Change Stream watcher: {e}")
+
+        # Chạy watcher trong một thread riêng
+        watcher_thread = Thread(target=watch_changes, daemon=True)
+        watcher_thread.start()
+        print("Watcher thread started (Change Stream supported).")

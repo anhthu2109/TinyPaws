@@ -181,7 +181,7 @@ const PaymentPage = () => {
         try {
             // 1. Lưu thông tin người nhận nếu user chọn
             if (allowSaveOption && saveForLater && authToken) {
-                const profileResponse = await fetch(`${API_BASE_URL}/auth/profile`, {
+                const profileResponse = await fetch(`${API_BASE_URL}/api/auth/profile`, {
                     method: "PUT",
                     headers: {
                         "Content-Type": "application/json",
@@ -225,7 +225,7 @@ const PaymentPage = () => {
                 discount_amount: 0
             };
             
-            const orderResponse = await fetch(`${API_BASE_URL}/orders`, {
+            const orderResponse = await fetch(`${API_BASE_URL}/api/orders`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

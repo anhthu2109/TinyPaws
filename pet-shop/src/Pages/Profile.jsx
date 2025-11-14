@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { User, Camera, Lock, ArrowLeft } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { CONFIG } from '../constants/config';
 
 const Profile = () => {
   const { user } = useAuth();
@@ -87,7 +88,7 @@ const Profile = () => {
       };
 
       // Call API to update profile
-      const response = await fetch('http://localhost:8000/api/auth/profile', {
+      const response = await fetch(`${CONFIG.API.BASE_URL}/api/auth/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -133,7 +134,7 @@ const Profile = () => {
       }
 
       // Call API to change password
-      const response = await fetch('http://localhost:8000/api/auth/change-password', {
+      const response = await fetch(`${CONFIG.API.BASE_URL}/api/auth/change-password`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
