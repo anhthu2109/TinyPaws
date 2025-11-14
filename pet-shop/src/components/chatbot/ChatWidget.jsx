@@ -14,7 +14,9 @@ const ChatWidget = () => {
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  const API_URL = CONFIG.API.CHATBOT_URL;
+  const API_URL = CONFIG.API.CHATBOT.BASE + CONFIG.API.CHATBOT.CHAT;
+  console.log("Chatbot API connect to:", API_URL);
+
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
