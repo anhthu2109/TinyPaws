@@ -1,9 +1,8 @@
-# main.py (sửa lại)
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from chat_rag import PetChatRAG
-from chat_rag_shop_mongo import ShopRAGMongo
+from chat_shop import ShopRAGMongo
 import os
 import time
 from dotenv import load_dotenv
@@ -27,6 +26,14 @@ if not MONGO_URI:
 
 app = FastAPI(title="TinyPaws Chatbot API")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # --- Thêm 2 biến global để chứa mô hình ---
 pet_rag: PetChatRAG | None = None
 shop_rag: ShopRAGMongo | None = None
@@ -40,7 +47,7 @@ async def load_models_on_startup():
     """
     global pet_rag, shop_rag
     
-    print("Sự kiện Startup: Đang khởi tạo mô hình chatbot...")
+    print("Đang khởi tạo mô hình chatbot...")
     start_time = time.time()
 
     # Sử dụng đường dẫn file đã sửa
@@ -52,24 +59,14 @@ async def load_models_on_startup():
     loop = asyncio.get_event_loop()
     await asyncio.gather(
         loop.run_in_executor(None, pet_rag.setup_with_cache),
-        loop.run_in_executor(None, shop_rag.setup, True) # True = start_watcher
+        loop.run_in_executor(None, shop_rag.setup, True)
     )
     
-    print(f"Sự kiện Startup: Tất cả chatbot đã sẵn sàng! ({round(time.time() - start_time, 2)}s)")
-
-# Middleware (giữ nguyên)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    print(f"Tất cả chatbot đã sẵn sàng! ({round(time.time() - start_time, 2)}s)")
 
 class ChatRequest(BaseModel):
     message: str
 
-# SHOP_KEYWORDS (giữ nguyên)
 SHOP_KEYWORDS = [
     "shop", "cửa hàng", "địa chỉ", "vận chuyển", "ship", "giao hàng",
     "giá", "bán", "sản phẩm", "mua", "thanh toán", "khuyến mãi", "sale",
@@ -82,8 +79,6 @@ def detect_query_type(message: str):
         return "shop"
     return "pet"
 
-# --- Sửa các API endpoint ---
-# Thêm async và kiểm tra xem mô hình đã tải xong chưa
 @app.post("/chat")
 async def chat_endpoint(req: ChatRequest):
     if not pet_rag or not shop_rag:

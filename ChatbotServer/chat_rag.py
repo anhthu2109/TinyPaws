@@ -16,7 +16,6 @@ INDEX_PATH = os.path.join(BASE_DIR, "faiss_index.bin")
 DATA_PATH = os.path.join(BASE_DIR, "qa_cache.parquet")
 # ========================
 
-
 class PetChatRAG:
     def __init__(self, api_key, data_file):
         self.api_key = api_key
@@ -36,7 +35,7 @@ class PetChatRAG:
         try:
             self.df = pd.read_excel(self.data_file)
             print(f"Data loaded from {self.data_file} ({len(self.df)} records)")
-            
+
             self.df["question"] = (
                 self.df["question"]
                 .astype(str)
@@ -45,7 +44,7 @@ class PetChatRAG:
                 .str.encode("ascii", errors="ignore")
                 .str.decode("utf-8")
             )
-            
+
             return True
         except Exception as e:
             print(f"Error loading data: {e}")
@@ -67,7 +66,7 @@ class PetChatRAG:
                 response = self.llm_model.generate_content(prompt)
                 return response.text
             except Exception as e:
-                print(f"Error LLM (attempt {attempt+1}/{max_retries}): {e}")
+                print(f"Lỗi LLM (lần {attempt+1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
                     time.sleep(backoff * (attempt + 1))
         return "Xin lỗi, tôi tạm thời không thể trả lời lúc này."
@@ -84,12 +83,6 @@ class PetChatRAG:
         self.df.dropna(subset=["embedding"], inplace=True)
 
         embeddings = np.array(self.df["embedding"].tolist()).astype("float32")
-        if embeddings.ndim == 1: # Handle empty or single item case
-             print("No embeddings generated, index will be empty.")
-             self.embedding_dimension = 768 # default dimension
-             self.index = faiss.IndexFlatIP(self.embedding_dimension)
-             return
-
         faiss.normalize_L2(embeddings)
         self.embedding_dimension = embeddings.shape[1]
 
@@ -99,22 +92,21 @@ class PetChatRAG:
 
 
     # === Cache ===
-    def save_cache(self, index_path=INDEX_PATH, data_path=DATA_PATH): # Sử dụng đường dẫn mới
+    def save_cache(self, index_path="faiss_index.bin", data_path="qa_cache.parquet"):
         try:
             faiss.write_index(self.index, index_path)
-            self.df.to_parquet(data_path, index=False, engine='pyarrow') # Thêm engine
+            self.df.to_parquet(data_path, index=False)
             print(f"Cache saved: {index_path}, {data_path}")
         except Exception as e:
             print(f"Error saving cache: {e}")
 
-    def load_cache(self, index_path=INDEX_PATH, data_path=DATA_PATH): # Sử dụng đường dẫn mới
+    def load_cache(self, index_path="faiss_index.bin", data_path="qa_cache.parquet"):
         try:
             if os.path.exists(index_path) and os.path.exists(data_path):
                 self.index = faiss.read_index(index_path)
-                self.df = pd.read_parquet(data_path, engine='pyarrow') # Thêm engine
+                self.df = pd.read_parquet(data_path)
                 print(f"Cache loaded ({len(self.df)} records).")
                 return True
-            print(f"Cache files not found (index_path: {index_path}, data_path: {data_path}), will build from scratch.")
             return False
         except Exception as e:
             print(f"Error loading cache: {e}")
@@ -140,53 +132,61 @@ class PetChatRAG:
 
         q_vec = np.array([query_emb], dtype="float32")
         faiss.normalize_L2(q_vec)
-        
-        if not self.index or self.index.ntotal == 0:
-             print("Index is empty, cannot search.")
-             return pd.DataFrame(), []
-
         D, I = self.index.search(q_vec, k)
         return self.df.iloc[I[0]], D[0]
 
     # === Generation ===
     def generate_answer(self, query, relevant_data):
-        if relevant_data.empty:
-            return self.llm_generate_with_retry(f"Bạn là chuyên gia chăm sóc thú cưng TinyPaws. Hãy trả lời câu hỏi: {query} (Lưu ý: không tìm thấy thông tin tham khảo, hãy trả lời dựa trên kiến thức chung về thú cưng một cách thân thiện.)")
-
         context = "\n".join(relevant_data["answers"].tolist())
         prompt = f"""
-        Bạn là chuyên gia chăm sóc thú cưng TinyPaws.
-        Hãy trả lời câu hỏi dưới đây chỉ dựa vào thông tin tham khảo.
-
-        Câu hỏi: {query}
-        Thông tin tham khảo:
+        Bạn là trợ lý AI thông minh của TinyPaws - chuyên gia chăm sóc thú cưng.
+        
+        Nhiệm vụ: Trả lời câu hỏi của người dùng một cách hữu ích và chính xác.
+        
+        Thông tin tham khảo từ dữ liệu nội bộ:
         {context}
-
-        Hãy trả lời ngắn gọn, rõ ràng, đúng dữ kiện và thân thiện.
+        
+        Câu hỏi của người dùng: {query}
+        
+        Hướng dẫn trả lời:
+        1. Ưu tiên sử dụng "Thông tin tham khảo" để trả lời.
+        2. Nếu thông tin tham khảo không đủ để trả lời hết ý, hãy DÙNG KIẾN THỨC CHUYÊN GIA của bạn để bổ sung, nhưng phải đảm bảo an toàn và đúng khoa học.
+        3. Giọng văn thân thiện, dễ thương (dùng các từ như "Sen", "Boss" nếu phù hợp), có emoji.
         """
         return self.llm_generate_with_retry(prompt)
 
-    # === Chat ===
+    # === Chat với kiểm tra Out-of-Domain ===
     def chat(self, query, k=3):
         start = time.time()
         relevant, scores = self.find_relevant_answers(query, k)
 
-        max_score = 0.0
-        if len(scores) > 0:
-            max_score = max(scores)
-        
-        print(f"Max similarity = {max_score:.3f} (threshold = {self.similarity_threshold})")
-        
-        if relevant.empty or max_score < self.similarity_threshold:
-            answer = "Xin lỗi, tôi không tìm thấy thông tin đáng tin cậy để trả lời câu hỏi này."
-            docs = []
-        else:
-            answer = self.generate_answer(query, relevant)
-            docs = relevant[["question", "answers"]].replace({np.nan: None}).to_dict("records")
+        max_sim = max(scores) if len(scores) else 0.0
+        print(f"Max similarity = {max_sim:.3f} (threshold = {self.similarity_threshold})")
+
+        # Bộ từ khóa nhận diện câu hỏi về thú cưng
+        PET_KEYWORDS = ["chó", "cho", "cún", "mèo", "meo", "pet", "thú cưng",
+                        "rối loạn", "bệnh", "chăm sóc", "ăn", "thức ăn", "khẩu phần",
+                        "tắm", "spa", "sức khỏe", "huấn luyện", "khám", "chó con"]
+
+        is_pet_query = any(kw in query.lower() for kw in PET_KEYWORDS)
+
+        # Nếu không liên quan thú cưng hoặc similarity quá thấp → từ chối
+        if not is_pet_query or max_sim < self.similarity_threshold:
+            return {
+                "response": "TinyPaws chỉ hỗ trợ các vấn đề về thú cưng. "
+                            "Bạn có thể hỏi về chăm sóc chó mèo nhé!",
+                "similar_documents": [],
+                "processing_time": round(time.time() - start, 2),
+                "max_similarity": round(max_sim, 3)
+            }
+
+        # Nếu hợp lệ → tạo câu trả lời từ knowledge base
+        answer = self.generate_answer(query, relevant)
+        docs = relevant[["question", "answers"]].replace({np.nan: None}).to_dict("records")
 
         return {
             "response": answer,
             "similar_documents": docs,
             "processing_time": round(time.time() - start, 2),
-            "max_similarity": float(max_score)
+            "max_similarity": round(max_sim, 3)
         }
