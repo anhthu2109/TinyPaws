@@ -10,10 +10,7 @@ from pymongo import MongoClient, errors
 from threading import Thread
 
 # === SỬA LỖI ĐƯỜNG DẪN ===
-# Lấy đường dẫn tuyệt đối của thư mục chứa file này
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Định nghĩa đường dẫn cache dựa trên BASE_DIR
 SHOP_INDEX_PATH = os.path.join(BASE_DIR, "shop_faiss.bin")
 SHOP_DATA_PATH = os.path.join(BASE_DIR, "shop_cache.parquet")
 # ========================
@@ -53,7 +50,8 @@ class ShopRAGMongo:
 
     # === Load data from MongoDB ===
     def load_data(self):
-        if not self.db_collection:
+        # === SỬA LỖI "is not None" ===
+        if self.db_collection is None:
             print("Bỏ qua load data, không có kết nối MongoDB.")
             return False
             
@@ -68,7 +66,6 @@ class ShopRAGMongo:
             self.df = pd.DataFrame(products)
             self.df["_id"] = self.df["_id"].astype(str)
             
-            # (Giữ nguyên phần chuẩn hóa ...)
             self.df["full_text"] = self.df.apply(
                 lambda row: f"Tên: {row['name']}. Mô tả: {row.get('description', '')}. Giá: {row.get('price', 0)} VND. Tồn kho: {row.get('stock', 0)}",
                 axis=1
@@ -79,6 +76,8 @@ class ShopRAGMongo:
         except Exception as e:
             print(f"Lỗi load data từ MongoDB: {e}")
             return False
+
+    # (Giữ nguyên get_embedding, llm_generate_with_retry ...)
     
     # === Embedding ===
     def get_embedding(self, text):
@@ -129,7 +128,7 @@ class ShopRAGMongo:
         print(f"FAISS index được tạo với {len(self.df)} sản phẩm.")
 
     # === Cache ===
-    def save_cache(self, index_path=SHOP_INDEX_PATH, data_path=SHOP_DATA_PATH): # Sử dụng đường dẫn mới
+    def save_cache(self, index_path=SHOP_INDEX_PATH, data_path=SHOP_DATA_PATH):
         try:
             if self.index:
                 faiss.write_index(self.index, index_path)
@@ -139,11 +138,11 @@ class ShopRAGMongo:
         except Exception as e:
             print(f"Lỗi lưu cache: {e}")
 
-    def load_cache(self, index_path=SHOP_INDEX_PATH, data_path=SHOP_DATA_PATH): # Sử dụng đường dẫn mới
+    def load_cache(self, index_path=SHOP_INDEX_PATH, data_path=SHOP_DATA_PATH):
         try:
             if os.path.exists(index_path) and os.path.exists(data_path):
                 self.index = faiss.read_index(index_path)
-                self.df = pd.read_parquet(data_path, engine='pyarrow') # Thêm engine
+                self.df = pd.read_parquet(data_path, engine='pyarrow')
                 self.embedding_dimension = self.index.d
                 print(f"Cache shop đã tải ({len(self.df)} sản phẩm).")
                 return True
@@ -168,8 +167,11 @@ class ShopRAGMongo:
             
         print("ShopRAG sẵn sàng!")
         
-        if start_watcher and self.db_collection:
+        # === SỬA LỖI "is not None" ===
+        if start_watcher and self.db_collection is not None:
             self.start_change_stream_watcher()
+
+    # (Giữ nguyên Retrieval, Generation, Chat, Watcher ...)
     
     # === Retrieval ===
     def find_relevant_products(self, query, k=3):
@@ -233,15 +235,16 @@ class ShopRAGMongo:
     # === Real-time watcher ===
     def reload_index(self):
         """Hàm này được gọi khi có thay đổi trong DB"""
-        print(" Phát hiện thay đổi MongoDB! Đang build lại index...")
+        print("Phát hiện thay đổi MongoDB! Đang build lại index...")
         if self.load_data():
             self.build_index()
             self.save_cache()
             print("Index shop đã được cập nhật.")
         
     def start_change_stream_watcher(self):
-        print(" Theo dõi thay đổi MongoDB (auto reload)...")
-        if not self.db_collection:
+        print("Theo dõi thay đổi MongoDB (auto reload)...")
+        # === SỬA LỖI "is not None" ===
+        if self.db_collection is None:
              print("Không thể theo dõi, chưa kết nối MongoDB.")
              return
 
