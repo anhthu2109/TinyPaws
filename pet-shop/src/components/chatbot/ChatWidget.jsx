@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import { FaPaperPlane, FaComments, FaTimes } from "react-icons/fa";
 import "./style.css";
+import { CONFIG } from "../../constants/config";
 
 const ChatWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -13,7 +14,7 @@ const ChatWidget = () => {
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  const API_URL = "http://localhost:8001/chat"; // Địa chỉ Chatbot Service
+  const API_URL = CONFIG.API.CHATBOT_URL;
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
