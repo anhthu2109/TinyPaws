@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { FaBox, FaSpinner, FaShoppingCart, FaComments } from 'react-icons/fa';
+import { CONFIG } from '../constants/config';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "/api";
+const API_BASE_URL = CONFIG.API.BASE_URL;
 
 const OrderHistory = () => {
     const { user } = useAuth();

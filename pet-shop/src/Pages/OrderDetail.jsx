@@ -8,9 +8,9 @@ import {
   FaMapMarkerAlt,
   FaCreditCard,
 } from "react-icons/fa";
+import { CONFIG } from "../constants/config";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "/api";
+const API_BASE_URL = CONFIG.API.BASE_URL;
 
 const OrderDetail = () => {
   const { id } = useParams();
@@ -124,10 +124,10 @@ const OrderDetail = () => {
         </h2>
         <p className="text-gray-600 mb-6">{error}</p>
         <button
-          onClick={() => navigate("/profile")}
+          onClick={() => navigate("/")}
           className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
-          Về trang cá nhân
+          Về trang chủ
         </button>
       </div>
     );
