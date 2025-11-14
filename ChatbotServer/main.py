@@ -1,3 +1,4 @@
+# main.py (sửa lại)
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,12 +7,10 @@ from chat_rag_shop_mongo import ShopRAGMongo
 import os
 import time
 from dotenv import load_dotenv
+import asyncio
 
 # === SỬA LỖI ĐƯỜNG DẪN ===
-# Lấy đường dẫn tuyệt đối của thư mục chứa file main.py này
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Nối đường dẫn tuyệt đối với tên file
 PET_DATA_FILE = os.path.join(BASE_DIR, "pet_data.xlsx")
 # ========================
 
@@ -28,6 +27,37 @@ if not MONGO_URI:
 
 app = FastAPI(title="TinyPaws Chatbot API")
 
+# --- Thêm 2 biến global để chứa mô hình ---
+pet_rag: PetChatRAG | None = None
+shop_rag: ShopRAGMongo | None = None
+# ----------------------------------------
+
+@app.on_event("startup")
+async def load_models_on_startup():
+    """
+    Hàm này sẽ chạy SAU KHI port 10000 đã mở.
+    Nó sẽ tải mô hình AI trong nền (background).
+    """
+    global pet_rag, shop_rag
+    
+    print("Sự kiện Startup: Đang khởi tạo mô hình chatbot...")
+    start_time = time.time()
+
+    # Sử dụng đường dẫn file đã sửa
+    pet_rag = PetChatRAG(GOOGLE_API_KEY, PET_DATA_FILE)
+    shop_rag = ShopRAGMongo(GOOGLE_API_KEY, MONGO_URI, db_name="TINYPAWS", collection="products")
+
+    # Setup with caches
+    # Chúng ta chạy 2 hàm này song song để tiết kiệm thời gian
+    loop = asyncio.get_event_loop()
+    await asyncio.gather(
+        loop.run_in_executor(None, pet_rag.setup_with_cache),
+        loop.run_in_executor(None, shop_rag.setup, True) # True = start_watcher
+    )
+    
+    print(f"Sự kiện Startup: Tất cả chatbot đã sẵn sàng! ({round(time.time() - start_time, 2)}s)")
+
+# Middleware (giữ nguyên)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -36,21 +66,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-print("Đang khởi tạo mô hình chatbot...")
-
-pet_rag = PetChatRAG(GOOGLE_API_KEY, PET_DATA_FILE)
-shop_rag = ShopRAGMongo(GOOGLE_API_KEY, MONGO_URI, db_name="TINYPAWS", collection="products")
-
-start_time = time.time()
-
-pet_rag.setup_with_cache()
-shop_rag.setup(start_watcher=True)
-
-print(f"Tất cả chatbot đã sẵn sàng! ({round(time.time() - start_time, 2)}s)")
-
 class ChatRequest(BaseModel):
     message: str
 
+# SHOP_KEYWORDS (giữ nguyên)
 SHOP_KEYWORDS = [
     "shop", "cửa hàng", "địa chỉ", "vận chuyển", "ship", "giao hàng",
     "giá", "bán", "sản phẩm", "mua", "thanh toán", "khuyến mãi", "sale",
@@ -63,11 +82,15 @@ def detect_query_type(message: str):
         return "shop"
     return "pet"
 
+# --- Sửa các API endpoint ---
+# Thêm async và kiểm tra xem mô hình đã tải xong chưa
 @app.post("/chat")
-def chat_endpoint(req: ChatRequest):
+async def chat_endpoint(req: ChatRequest):
+    if not pet_rag or not shop_rag:
+        return {"response": "Bot đang khởi động, vui lòng chờ 1-2 phút và thử lại...", "type": "loading"}
+
     query = req.message.strip()
     query_type = detect_query_type(query)
-
     print(f"Loại câu hỏi: {query_type.upper()} | Câu: {query}")
 
     if query_type == "shop":
@@ -83,7 +106,9 @@ def chat_endpoint(req: ChatRequest):
     }
 
 @app.post("/admin/reindex/shop")
-def reindex_shop():
+async def reindex_shop():
+    if not shop_rag:
+        return {"success": False, "error": "Bot chưa sẵn sàng"}
     try:
         shop_rag.reload_index()
         return {"success": True, "message": "Shop index reloaded"}
@@ -91,13 +116,17 @@ def reindex_shop():
         return {"success": False, "error": str(e)}
 
 @app.post("/chat/pet")
-def chat_pet(req: ChatRequest):
+async def chat_pet(req: ChatRequest):
+    if not pet_rag:
+        return {"response": "Bot đang khởi động, vui lòng chờ 1-2 phút và thử lại...", "type": "loading"}
     return pet_rag.chat(req.message)
 
 @app.post("/chat/shop")
-def chat_shop(req: ChatRequest):
+async def chat_shop(req: ChatRequest):
+    if not shop_rag:
+        return {"response": "Bot đang khởi động, vui lòng chờ 1-2 phút và thử lại...", "type": "loading"}
     return shop_rag.chat(req.message)
 
 @app.get("/")
 def root():
-    return {"message": "TinyPaws Chatbot API đang hoạt động"}
+    return {"message": "TinyPaws Chatbot API đang hoạt động (Đang tải mô hình trong nền...)"}
