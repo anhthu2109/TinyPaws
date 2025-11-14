@@ -47,9 +47,10 @@ export const CONFIG = {
 
         // API Chatbot
         CHATBOT: {
-            BASE: API_BASE,
-            CHAT: "/chat", // Endpoint cố định
+            BASE: import.meta.env.VITE_CHATBOT_URL || "http://localhost:8001",
+            CHAT: "/chat",
         },
+
 
         ENDPOINTS: {
             PRODUCTS: "/api/products",
