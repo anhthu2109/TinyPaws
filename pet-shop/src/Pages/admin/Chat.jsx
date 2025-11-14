@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FaSearch, FaUser, FaPaperPlane, FaEllipsisV } from 'react-icons/fa';
 import axios from 'axios';
+import { CONFIG } from '../../constants/config';
 
 const Chat = () => {
     const [conversations, setConversations] = useState([]);
@@ -25,7 +26,7 @@ const Chat = () => {
     const fetchConversations = async () => {
         try {
             setLoading(true);
-            const response = await axios.get('http://localhost:3000/api/messages/admin/conversations');
+            const response = await axios.get(`${CONFIG.API.BASE_URL}/api/messages/admin/conversations`);
             
             if (response.data.success) {
                 setConversations(response.data.data.conversations);
@@ -42,7 +43,7 @@ const Chat = () => {
 
     const fetchMessages = async (userId) => {
         try {
-            const response = await axios.get(`http://localhost:3000/api/messages/admin/conversation/${userId}`);
+            const response = await axios.get(`${CONFIG.API.BASE_URL}/api/messages/admin/conversation/${userId}`);
             
             if (response.data.success) {
                 setMessages(response.data.data.messages);
@@ -56,7 +57,7 @@ const Chat = () => {
 
     const fetchMessageStats = async () => {
         try {
-            const response = await axios.get('http://localhost:3000/api/messages/admin/stats');
+            const response = await axios.get(`${CONFIG.API.BASE_URL}/api/messages/admin/stats`);
             if (response.data.success) {
                 setStats(response.data.data);
             }
@@ -67,7 +68,7 @@ const Chat = () => {
 
     const markAsRead = async (userId) => {
         try {
-            await axios.patch('http://localhost:3000/api/messages/mark-read', {
+            await axios.patch(`${CONFIG.API.BASE_URL}/api/messages/mark-read`, {
                 senderId: userId
             });
             // Refresh conversations to update unread count
@@ -81,7 +82,7 @@ const Chat = () => {
         if (!newMessage.trim() || !selectedConversation) return;
 
         try {
-            const response = await axios.post('http://localhost:3000/api/messages/admin/send', {
+            const response = await axios.post(`${CONFIG.API.BASE_URL}/api/messages/admin/send`, {
                 receiverId: selectedConversation._id,
                 content: newMessage.trim()
             });

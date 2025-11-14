@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FaPlus, FaEdit, FaTrash, FaSearch, FaFilter, FaEye } from 'react-icons/fa';
 import axios from 'axios';
+import { CONFIG } from '../../constants/config';
 
 const Content = () => {
     const [blogs, setBlogs] = useState([]);
@@ -26,7 +27,7 @@ const Content = () => {
                 ...(statusFilter && { status: statusFilter })
             };
             
-            const response = await axios.get('http://localhost:3000/api/blogs', { params });
+            const response = await axios.get(`${CONFIG.API.BASE_URL}/api/blogs`, { params });
             
             if (response.data.success) {
                 setBlogs(response.data.data.blogs);
@@ -41,7 +42,7 @@ const Content = () => {
 
     const fetchBlogStats = async () => {
         try {
-            const response = await axios.get('http://localhost:3000/api/blogs/admin/stats');
+            const response = await axios.get(`${CONFIG.API.BASE_URL}/api/blogs/admin/stats`);
             if (response.data.success) {
                 setStats(response.data.data);
             }
@@ -53,7 +54,7 @@ const Content = () => {
     const deleteBlog = async (blogId) => {
         if (window.confirm('Bạn có chắc chắn muốn xóa bài viết này?')) {
             try {
-                await axios.delete(`http://localhost:3000/api/blogs/${blogId}`);
+                await axios.delete(`${CONFIG.API.BASE_URL}/api/blogs/${blogId}`);
                 fetchBlogs(); // Refresh list
                 fetchBlogStats(); // Refresh stats
             } catch (error) {
@@ -65,7 +66,7 @@ const Content = () => {
 
     const toggleBlogStatus = async (blogId, currentStatus) => {
         try {
-            await axios.patch(`http://localhost:3000/api/blogs/${blogId}/status`, {
+            await axios.patch(`${CONFIG.API.BASE_URL}/api/blogs/${blogId}/status`, {
                 status: currentStatus === 'published' ? 'draft' : 'published'
             });
             fetchBlogs(); // Refresh list

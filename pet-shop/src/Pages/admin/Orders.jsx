@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FaEye, FaEdit, FaSearch, FaFilter, FaDownload, FaTrash, FaTimes } from 'react-icons/fa';
 import axios from 'axios';
+import { CONFIG } from '../../constants/config';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "/api";
+const API_BASE_URL = `${CONFIG.API.BASE_URL}/api`;
 
 const Orders = () => {
     const [orders, setOrders] = useState([]);

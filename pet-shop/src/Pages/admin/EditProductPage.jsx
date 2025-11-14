@@ -4,6 +4,7 @@ import { FaArrowLeft, FaEdit } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import ProductForm from '../../components/admin/ProductForm';
 import adminApi from '../../api/adminApi';
+import { CONFIG } from '../../constants/config';
 
 const EditProductPage = () => {
     const navigate = useNavigate();
@@ -22,7 +23,7 @@ const EditProductPage = () => {
             
             setFetchLoading(true);
             try {
-                const response = await adminApi.get(`/products/${id}`);
+                const response = await adminApi.get(`${CONFIG.API.BASE_URL}/products/${id}`);
                 if (response.data.success) {
                     setProductData(response.data.data);
                 } else {
@@ -73,7 +74,7 @@ const EditProductPage = () => {
 
             console.log('Processed submit data:', submitData);
 
-            const response = await adminApi.put(`/products/${id}`, submitData);
+            const response = await adminApi.put(`${CONFIG.API.BASE_URL}/products/${id}`, submitData);
             console.log('Update response:', response.data);
 
             if (response.data.success) {

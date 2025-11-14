@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { User, Camera, Lock } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import CONFIG from '../../config';
+import { CONFIG } from "../../constants/config";
 
 const Profile = () => {
   const { user } = useAuth();

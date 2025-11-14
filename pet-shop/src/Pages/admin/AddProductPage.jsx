@@ -4,6 +4,7 @@ import { FaArrowLeft, FaPlus } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import ProductForm from '../../components/admin/ProductForm';
 import adminApi from '../../api/adminApi';
+import { CONFIG } from '../../constants/config';
 
 const AddProductPage = () => {
     const navigate = useNavigate();
@@ -15,7 +16,7 @@ const AddProductPage = () => {
         setLoading(true);
         
         try {          
-            const response = await adminApi.post('/products', formData);
+            const response = await adminApi.post(`${CONFIG.API.BASE_URL}/products`, formData);
             if (response.data.success) {
                 // Hiển thị thông báo thành công
                 //alert('✅ Thêm sản phẩm thành công!');

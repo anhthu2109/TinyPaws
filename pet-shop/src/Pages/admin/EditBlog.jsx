@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Button, TextField, Select, MenuItem, FormControl, InputLabel, Snackbar, Alert, CircularProgress } from "@mui/material";
-import { FaArrowLeft, FaImage, FaTrash } from "react-icons/fa";
+import { Button, TextField, Snackbar, Alert, CircularProgress } from "@mui/material";
+import { FaImage, FaTrash } from "react-icons/fa";
 import axios from "axios";
 import { uploadBlogImage, validateImageFile } from "../../utils/blogImageUpload";
+import { CONFIG } from "../../constants/config";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "/api";
+const API_BASE_URL = `${CONFIG.API.BASE_URL}/api`;
 
 const EditBlog = () => {
   const { id } = useParams();

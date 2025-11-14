@@ -24,6 +24,7 @@ import {
     Cell
 } from 'recharts';
 import adminApi from '../../api/adminApi';
+import { CONFIG } from '../../constants/config';
 
 const Dashboard = () => {
     const [stats, setStats] = useState({});
@@ -45,9 +46,9 @@ const Dashboard = () => {
             
             // Fetch all dashboard data in parallel
             const [statsRes, ordersRes, revenueRes] = await Promise.all([
-                adminApi.get('/dashboard/stats'),
-                adminApi.get('/orders/admin/all?limit=5&sort=-createdAt'),
-                adminApi.get('/dashboard/revenue-chart')
+                adminApi.get(`${CONFIG.API.BASE_URL}/dashboard/stats`),
+                adminApi.get(`${CONFIG.API.BASE_URL}/orders/admin/all?limit=5&sort=-createdAt`),
+                adminApi.get(`${CONFIG.API.BASE_URL}/dashboard/revenue-chart`)
             ]);
 
             if (statsRes.data.success) {
