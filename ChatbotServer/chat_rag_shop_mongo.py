@@ -31,14 +31,14 @@ class ShopRAGMongo:
         self.index = None
         self.watch_thread = None
 
-    # === 1️⃣ LOAD DATA TỪ MONGODB ===
+    # === 1. LOAD DATA TỪ MONGODB ===
     def load_data(self):
         docs = list(self.collection.find(
             {}, {"name": 1, "description": 1, "price": 1, "stock_quantity": 1}
         ))
 
         if not docs:
-            print("⚠️ MongoDB chưa có sản phẩm nào.")
+            print("MongoDB chưa có sản phẩm nào.")
             self.data = pd.DataFrame()
             return
 
@@ -49,18 +49,18 @@ class ShopRAGMongo:
             axis=1,
         )
         self.data = df
-        print(f"✅ Loaded {len(df)} sản phẩm từ MongoDB.")
+        print(f"Loaded {len(df)} sản phẩm từ MongoDB.")
 
-    # === 2️⃣ KIỂM TRA REPLICA SET/ATLAS CLUSTER ===
+    # === 2️. KIỂM TRA REPLICA SET/ATLAS CLUSTER ===
     def supports_change_streams(self):
         try:
             info = self.client.admin.command("hello")
             return bool(info.get("setName"))  # chỉ true nếu replica set / Atlas
         except Exception as e:
-            print(f"⚠️ Không thể kiểm tra Change Stream support: {e}")
+            print(f"Không thể kiểm tra Change Stream support: {e}")
             return False
 
-    # === 3️⃣ LẤY EMBEDDING TỪ GEMINI ===
+    # === 3️. LẤY EMBEDDING TỪ GEMINI ===
     def get_embedding(self, text):
         try:
             result = genai.embed_content(
@@ -69,15 +69,15 @@ class ShopRAGMongo:
             )
             return result["embedding"]
         except Exception as e:
-            print(f"❌ Lỗi lấy embedding: {e}")
+            print(f"Lỗi lấy embedding: {e}")
             return None
 
-    # === 4️⃣ TẠO EMBEDDING CHO TOÀN BỘ DATA (CÓ RATE LIMIT) ===
+    # === 4️. TẠO EMBEDDING CHO TOÀN BỘ DATA (CÓ RATE LIMIT) ===
     def create_embeddings_for_data(self):
         if self.data is None or self.data.empty:
             return
 
-        print("🔄 Đang tạo embeddings cho sản phẩm...")
+        print("Đang tạo embeddings cho sản phẩm...")
         embeddings = []
         for text in self.data["combined"].tolist():
             emb = self.get_embedding(text)
@@ -86,10 +86,10 @@ class ShopRAGMongo:
         self.data["embedding"] = embeddings
         self.data.dropna(subset=["embedding"], inplace=True)
 
-    # === 5️⃣ XÂY DỰNG FAISS INDEX ===
+    # === 5️. XÂY DỰNG FAISS INDEX ===
     def build_index(self):
         if self.data is None or self.data.empty:
-            print("⚠️ Không có dữ liệu để tạo index.")
+            print("Không có dữ liệu để tạo index.")
             return
 
         if "embedding" not in self.data.columns or self.data["embedding"].isnull().any():
@@ -97,39 +97,39 @@ class ShopRAGMongo:
 
         embeddings = np.array(self.data["embedding"].tolist(), dtype="float32")
         if embeddings.size == 0:
-            print("⚠️ Không có embedding hợp lệ.")
+            print("Không có embedding hợp lệ.")
             return
 
         dim = embeddings.shape[1]
         faiss.normalize_L2(embeddings)
         self.index = faiss.IndexFlatIP(dim)
         self.index.add(embeddings)
-        print(f"✅ FAISS index được tạo với {len(self.data)} sản phẩm.")
+        print(f"FAISS index được tạo với {len(self.data)} sản phẩm.")
 
-    # === 6️⃣ CACHE INDEX & DATA ===
+    # === 6️. CACHE INDEX & DATA ===
     def save_cache(self, index_path="shop_faiss.bin", data_path="shop_cache.parquet"):
         try:
             if self.index is not None:
                 faiss.write_index(self.index, index_path)
             if self.data is not None:
                 self.data.to_parquet(data_path, index=False)
-            print("💾 Shop cache saved.")
+            print("Shop cache saved.")
         except Exception as e:
-            print(f"⚠️ Lỗi lưu cache: {e}")
+            print(f"Lỗi lưu cache: {e}")
 
     def load_cache(self, index_path="shop_faiss.bin", data_path="shop_cache.parquet"):
         try:
             if os.path.exists(index_path) and os.path.exists(data_path):
                 self.index = faiss.read_index(index_path)
                 self.data = pd.read_parquet(data_path)
-                print("✅ Shop cache loaded.")
+                print("Shop cache loaded.")
                 return True
             return False
         except Exception as e:
-            print(f"⚠️ Lỗi load cache: {e}")
+            print(f"Lỗi load cache: {e}")
             return False
 
-    # === 7️⃣ TÌM SẢN PHẨM LIÊN QUAN ===
+    # === 7️. TÌM SẢN PHẨM LIÊN QUAN ===
     def search_products(self, query, k=3):
         if self.index is None:
             return pd.DataFrame()
@@ -143,7 +143,7 @@ class ShopRAGMongo:
         D, I = self.index.search(q_vec, k)
         return self.data.iloc[I[0]]
 
-    # === 8️⃣ CHATBOT TRẢ LỜI NGƯỜI DÙNG ===
+    # === 8️. CHATBOT TRẢ LỜI NGƯỜI DÙNG ===
     def chat(self, query):
         start_time = time.time()
         results = self.search_products(query)
@@ -202,24 +202,24 @@ class ShopRAGMongo:
             "processing_time": round(float(time.time() - start_time), 2),
         }
 
-    # === 9️⃣ AUTO-WATCH MONGODB (Chỉ dùng nếu ReplicaSet/Atlas) ===
+    # === 9️.AUTO-WATCH MONGODB (Chỉ dùng nếu ReplicaSet/Atlas) ===
     def watch_for_changes(self):
-        print("👀 Theo dõi thay đổi MongoDB (auto reload)...")
+        print("Theo dõi thay đổi MongoDB (auto reload)...")
         try:
             with self.collection.watch() as stream:
                 for change in stream:
-                    print(f"🔄 Phát hiện thay đổi: {change['operationType']}")
+                    print(f"Phát hiện thay đổi: {change['operationType']}")
                     self.reload_index()
         except Exception as e:
-            print(f"⚠️ Lỗi trong watch_for_changes: {e}")
+            print(f"Lỗi trong watch_for_changes: {e}")
 
     def reload_index(self):
-        print("♻️ Đang cập nhật dữ liệu và FAISS index...")
+        print("Đang cập nhật dữ liệu và FAISS index...")
         self.load_data()
         self.build_index()
-        print("✅ Dữ liệu & index đã được cập nhật!")
+        print("Dữ liệu & index đã được cập nhật!")
 
-    # === 🔟 KHỞI TẠO HỆ THỐNG ===
+    # === 10. KHỞI TẠO HỆ THỐNG ===
     def setup(self, start_watcher=True):
         if not self.load_cache():
             self.load_data()
@@ -229,6 +229,6 @@ class ShopRAGMongo:
         if start_watcher and self.supports_change_streams():
             self.watch_thread = threading.Thread(target=self.watch_for_changes, daemon=True)
             self.watch_thread.start()
-            print("👁 Watcher thread started (Change Stream supported).")
+            print("Watcher thread started (Change Stream supported).")
         else:
-            print("ℹ️ Change Stream not supported or watcher disabled.")
+            print("Change Stream not supported or watcher disabled.")

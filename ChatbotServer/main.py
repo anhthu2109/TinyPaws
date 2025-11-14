@@ -1,7 +1,6 @@
-# main.py (sửa lại)
-from fastapi import FastAPI  # type: ignore[import]
+from fastapi import FastAPI 
 from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware  # type: ignore[import]
+from fastapi.middleware.cors import CORSMiddleware 
 from chat_rag import PetChatRAG
 from chat_rag_shop_mongo import ShopRAGMongo
 import os
