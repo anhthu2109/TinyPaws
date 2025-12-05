@@ -1,5 +1,10 @@
 {
   "dependencies": {
-    "@paypal/react-paypal-js": "^8.9.2"
+    "@paypal/react-paypal-js": "^8.9.2",
+    "dotenv": "^17.2.3",
+    "mongoose": "^9.0.0"
+  },
+  "devDependencies": {
+    "baseline-browser-mapping": "^2.8.29"
   }
 }

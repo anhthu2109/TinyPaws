@@ -67,7 +67,7 @@ const Profile = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -102,9 +102,7 @@ const Profile = () => {
         if (avatarPreview && user) {
           localStorage.setItem(`avatar_${user.id}`, avatarPreview);
         }
-        
-        alert('Profile updated successfully!');
-        
+
         // Reload to update context
         window.location.reload();
       } else {
@@ -118,7 +116,7 @@ const Profile = () => {
 
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       alert("Password confirmation does not match!");
       return;
@@ -170,7 +168,7 @@ const Profile = () => {
         alert('Please select an image file!');
         return;
       }
-      
+
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         alert('Image size should not exceed 5MB!');
@@ -178,14 +176,14 @@ const Profile = () => {
       }
 
       setAvatarFile(file);
-      
+
       // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
         setAvatarPreview(reader.result);
       };
       reader.readAsDataURL(file);
-      
+
       // TODO: Upload to server
       console.log('Avatar file:', file);
       alert('Image selected! Click "Update" to save changes.');
@@ -248,22 +246,20 @@ const Profile = () => {
               <div className="space-y-2">
                 <button
                   onClick={() => setActiveTab("personal")}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "personal"
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${activeTab === "personal"
                       ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white"
                       : "text-gray-700 hover:bg-gray-100"
-                  }`}
+                    }`}
                 >
                   <User size={18} />
                   Personal Settings
                 </button>
                 <button
                   onClick={() => setActiveTab("password")}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "password"
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${activeTab === "password"
                       ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white"
                       : "text-gray-700 hover:bg-gray-100"
-                  }`}
+                    }`}
                 >
                   <Lock size={18} />
                   Password Settings
@@ -386,7 +382,7 @@ const Profile = () => {
                         onChange={handleInputChange}
                         rows={4}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all resize-none"
-                        placeholder="My name is Bui Thien Nhan, I'm a full stack developer"
+                        placeholder="...tell us about yourself"
                       />
                     </div>
                   </div>
@@ -414,7 +410,7 @@ const Profile = () => {
                     {/* Current Password */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Current Password
+                        Mật khẩu hiện tại
                       </label>
                       <input
                         type="password"
@@ -430,7 +426,7 @@ const Profile = () => {
                     {/* New Password */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        New Password
+                        Mật khẩu mới
                       </label>
                       <input
                         type="password"
@@ -446,7 +442,7 @@ const Profile = () => {
                     {/* Confirm Password */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Confirm New Password
+                        Xác nhận mật khẩu mới
                       </label>
                       <input
                         type="password"
@@ -466,7 +462,7 @@ const Profile = () => {
                       type="submit"
                       className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all shadow-md hover:shadow-lg"
                     >
-                      Change Password
+                      Update
                     </button>
                   </div>
                 </form>

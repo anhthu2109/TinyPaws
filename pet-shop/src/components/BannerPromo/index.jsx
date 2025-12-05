@@ -44,7 +44,7 @@ const BannerPromo = () => {
                                     <span className="sm:hidden"> </span>cho Chó
                                 </h3>
                                 <Button 
-                                    className="!bg-white !text-black !px-4 !py-2 sm:!px-6 !rounded-full hover:!bg-[#ff5252] hover:!text-white transition !text-[12px] sm:!text-[14px] !font-medium"
+                                    className="!bg-white !text-black !px-4 !py-2 sm:!px-6 !rounded-full hover:!bg-[#80ccab] hover:!text-white transition !text-[12px] sm:!text-[14px] !font-medium"
                                     onClick={(e) => {
                                         e.stopPropagation(); // Prevent banner click event
                                         handleDogProductsClick();
@@ -83,7 +83,7 @@ const BannerPromo = () => {
                                     <span className="sm:hidden"> </span>cho Mèo
                                 </h3>
                                 <Button 
-                                    className="!bg-white !text-black !px-4 !py-2 sm:!px-6 !rounded-full hover:!bg-[#ff5252] hover:!text-white transition !text-[12px] sm:!text-[14px] !font-medium"
+                                    className="!bg-white !text-black !px-4 !py-2 sm:!px-6 !rounded-full hover:!bg-[#80ccab] hover:!text-white transition !text-[12px] sm:!text-[14px] !font-medium"
                                     onClick={(e) => {
                                         e.stopPropagation(); // Prevent banner click event
                                         handleCatProductsClick();

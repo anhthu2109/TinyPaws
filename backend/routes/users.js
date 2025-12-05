@@ -52,17 +52,14 @@ router.get('/profile', auth, async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
         }
-        
+
         const profile = mapUserToRecipientProfile(user);
-        
+
         // Check if user has recipient info (excluding email which is always present)
         const hasRecipientInfo = ['fullName', 'phone', 'province', 'district', 'ward', 'detailAddress']
             .some((key) => Boolean(profile[key]?.toString().trim()));
-        
-        console.log('📌 GET /profile - User:', user.email);
-        console.log('📌 Profile mapped:', profile);
-        console.log('📌 Has recipient info:', hasRecipientInfo);
-        
+
+
         return res.json({
             success: true,
             data: {
@@ -87,7 +84,7 @@ router.put('/profile', auth, async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
         }
-        
+
         // Update email
         if (email && email !== user.email) {
             const existing = await User.findOne({ email, _id: { $ne: req.user._id } });
@@ -96,20 +93,20 @@ router.put('/profile', auth, async (req, res) => {
             }
             user.email = email;
         }
-        
+
         // Update full name (sync both new and old fields)
         if (typeof fullName === 'string' && fullName.trim()) {
             user.full_name = fullName.trim();
             user.name = user.full_name;
         }
-        
+
         // Update phone (sync both new and old fields)
         if (typeof phone === 'string' && phone.trim()) {
             const normalizedPhone = phone.trim();
             user.phone = normalizedPhone;
             user.phone_number = normalizedPhone;
         }
-        
+
         // Update address (sync both nested shippingAddress and flat fields)
         if (address && typeof address === 'object') {
             // Update nested shippingAddress
@@ -119,7 +116,7 @@ router.put('/profile', auth, async (req, res) => {
                 ward: address.ward?.trim() || user.shippingAddress?.ward || "",
                 detail: address.detail?.trim() || user.shippingAddress?.detail || "",
             };
-            
+
             // Sync flat fields for backward compatibility
             if (address.province?.trim()) {
                 user.city = address.province.trim();
@@ -128,13 +125,13 @@ router.put('/profile', auth, async (req, res) => {
                 user.address = address.detail.trim();
             }
         }
-        
+
         await user.save();
-        
+
         // Reload user to get updated data
         const updatedUser = await User.findById(req.user._id);
         const profile = mapUserToRecipientProfile(updatedUser);
-        
+
         return res.json({
             success: true,
             message: 'Cập nhật thông tin thành công',

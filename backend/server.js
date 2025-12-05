@@ -26,9 +26,9 @@ app.get('/debug/user/:email', async (req, res) => {
     try {
         const User = require('./models/User');
         const bcrypt = require('bcryptjs');
-        
+
         const user = await User.findOne({ email: req.params.email.toLowerCase() }).select('+hashed_password +password');
-        
+
         if (!user) {
             return res.json({ found: false, email: req.params.email });
         }
@@ -64,22 +64,22 @@ app.post('/debug/fix-invalid-categories', async (req, res) => {
         const Product = require('./models/Product');
         const Category = require('./models/Category');
         const mongoose = require('mongoose');
-        
+
         // Find all products
         const products = await Product.find().lean();
         let fixed = 0;
         const errors = [];
-        
+
         for (const product of products) {
             // Check if category is a valid ObjectId
             if (!mongoose.Types.ObjectId.isValid(product.category) || product.category.toString().length !== 24) {
                 // Try to find matching category
                 const categoryName = product.category.toString();
-                
+
                 // Try to extract category name from combined string
                 let matchedCategory = null;
                 const categories = await Category.find();
-                
+
                 // Try exact match first
                 for (const cat of categories) {
                     if (categoryName.includes(cat.name)) {
@@ -87,7 +87,7 @@ app.post('/debug/fix-invalid-categories', async (req, res) => {
                         break;
                     }
                 }
-                
+
                 // If no match, try keyword matching
                 if (!matchedCategory) {
                     const categoryKeywords = {
@@ -96,7 +96,7 @@ app.post('/debug/fix-invalid-categories', async (req, res) => {
                         'phụ kiện': 'Phụ kiện',
                         'đồ chơi': 'Đồ chơi'
                     };
-                    
+
                     for (const [keyword, catName] of Object.entries(categoryKeywords)) {
                         if (categoryName.toLowerCase().includes(keyword)) {
                             matchedCategory = categories.find(c => c.name === catName);
@@ -104,7 +104,7 @@ app.post('/debug/fix-invalid-categories', async (req, res) => {
                         }
                     }
                 }
-                
+
                 if (matchedCategory) {
                     await Product.updateOne(
                         { _id: product._id },
@@ -120,7 +120,7 @@ app.post('/debug/fix-invalid-categories', async (req, res) => {
                 }
             }
         }
-        
+
         res.json({
             success: true,
             message: 'Fixed invalid categories',
@@ -141,7 +141,7 @@ app.post('/debug/fix-categories', async (req, res) => {
 
         // Get all categories
         const categories = await Category.find();
-        
+
         // Category name mapping
         const categoryMap = {
             'Thức ăn cho chó': 'Thức ăn',
@@ -155,14 +155,14 @@ app.post('/debug/fix-categories', async (req, res) => {
 
         // Get all products
         const products = await Product.find();
-        
+
         let updated = 0;
         let skipped = 0;
         const results = [];
 
         for (const product of products) {
             // Check if category is already an ObjectId
-            if (mongoose.Types.ObjectId.isValid(product.category) && 
+            if (mongoose.Types.ObjectId.isValid(product.category) &&
                 product.category.toString().length === 24) {
                 skipped++;
                 continue;
@@ -179,12 +179,12 @@ app.post('/debug/fix-categories', async (req, res) => {
                 // Update product with category ObjectId
                 await Product.updateOne(
                     { _id: product._id },
-                    { 
-                        $set: { 
+                    {
+                        $set: {
                             category: category._id,
-                            target: oldCategoryName.includes('chó') ? 'dog' : 
-                                   oldCategoryName.includes('mèo') ? 'cat' : 'both'
-                        } 
+                            target: oldCategoryName.includes('chó') ? 'dog' :
+                                oldCategoryName.includes('mèo') ? 'cat' : 'both'
+                        }
                     }
                 );
                 results.push({
@@ -222,6 +222,8 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const userRoutes = require('./routes/users');
 const blogRoutes = require('./routes/blogs');
 const recommendationRoutes = require('./routes/recommendations');
+const chatRoutes = require('./routes/chat');
+const messageRoutes = require('./routes/messages');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -233,11 +235,13 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/blogs', blogRoutes);
 app.use('/api/recommendations', recommendationRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/messages', messageRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    res.status(500).json({ 
-        success: false, 
+    res.status(500).json({
+        success: false,
         message: 'Something went wrong!',
         error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
     });
@@ -245,9 +249,9 @@ app.use((err, req, res, next) => {
 
 // Handle 404
 app.use('*', (req, res) => {
-    res.status(404).json({ 
-        success: false, 
-        message: 'Route not found' 
+    res.status(404).json({
+        success: false,
+        message: 'Route not found'
     });
 });
 

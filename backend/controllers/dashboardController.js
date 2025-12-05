@@ -78,32 +78,38 @@ const getDashboardStats = async (req, res) => {
 // @access  Private/Admin
 const getRevenueChartData = async (req, res) => {
     try {
-        // Get last 7 days revenue data
-        const last7Days = [];
-        for (let i = 6; i >= 0; i--) {
+        // Get last 30 days revenue data
+        const daysRange = 30;
+        const dailyData = [];
+        for (let i = daysRange - 1; i >= 0; i--) {
             const date = new Date();
             date.setDate(date.getDate() - i);
             date.setHours(0, 0, 0, 0);
             
             const nextDate = new Date(date);
             nextDate.setDate(nextDate.getDate() + 1);
-            
+
             const dayRevenue = await Order.aggregate([
                 {
                     $match: {
-                        status: { $in: ['delivered', 'processing', 'confirmed'] },
+                        status: { $ne: 'cancelled' },
                         createdAt: { $gte: date, $lt: nextDate }
                     }
                 },
                 { $group: { _id: null, total: { $sum: '$final_total' } } }
             ]);
-            
+
             const dayOrders = await Order.countDocuments({
+                status: { $ne: 'cancelled' },
                 createdAt: { $gte: date, $lt: nextDate }
             });
 
-            last7Days.push({
-                name: `T${i === 0 ? 'hôm nay' : i}`,
+            const label = i === 0
+                ? 'Hôm nay'
+                : date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+
+            dailyData.push({
+                name: label,
                 value: dayRevenue.length > 0 ? dayRevenue[0].total : 0,
                 orders: dayOrders
             });
@@ -128,13 +134,26 @@ const getRevenueChartData = async (req, res) => {
                     revenue: { $sum: { $multiply: ['$items.quantity', '$items.price'] } }
                 }
             },
+            {
+                $lookup: {
+                    from: 'categories',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'category'
+                }
+            },
+            {
+                $addFields: {
+                    category: { $arrayElemAt: ['$category', 0] }
+                }
+            },
             { $sort: { count: -1 } },
             { $limit: 5 }
         ]);
 
         const colors = ['#ff5252', '#2196f3', '#4caf50', '#ff9800', '#9c27b0'];
         const categories = categoryData.map((item, index) => ({
-            name: item._id || 'Khác',
+            name: item.category?.name || 'Khác',
             value: item.count,
             revenue: item.revenue,
             color: colors[index] || '#607d8b'
@@ -143,8 +162,8 @@ const getRevenueChartData = async (req, res) => {
         res.json({
             success: true,
             data: {
-                revenue: last7Days,
-                orders: last7Days.map(day => ({ name: day.name, orders: day.orders })),
+                revenue: dailyData,
+                orders: dailyData.map(day => ({ name: day.name, orders: day.orders })),
                 categories
             }
         });

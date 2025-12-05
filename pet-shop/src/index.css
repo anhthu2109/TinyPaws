@@ -101,6 +101,14 @@ nav ul button:hover {
   font-weight: bold;
 }
 
+.sliderHome .swiper-button-disabled {
+  opacity: 0.35 !important;
+  cursor: not-allowed !important;
+  pointer-events: auto !important;
+  background: #f3f4f6 !important;
+  color: #a3a3a3 !important;
+}
+
 .sliderHome .swiper-button-prev svg,
 .sliderHome .swiper-button-next svg {
   height: 30px;
@@ -159,6 +167,14 @@ nav ul button:hover {
 .productSwiper .swiper-button-next:hover {
   background: #ff5252 !important;
   color: #fff !important;
+}
+
+.productSwiper .swiper-button-disabled {
+  cursor: not-allowed !important;
+  opacity: 0.4 !important;
+  pointer-events: auto !important;
+  background: #f3f4f6 !important;
+  color: #a3a3a3 !important;
 }
 
 /* Category Panel z-index fix */

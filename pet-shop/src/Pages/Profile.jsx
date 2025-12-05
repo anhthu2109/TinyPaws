@@ -69,7 +69,7 @@ const Profile = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -104,23 +104,19 @@ const Profile = () => {
         if (avatarPreview && user) {
           localStorage.setItem(`avatar_${user.id}`, avatarPreview);
         }
-        
-        alert('Cập nhật thông tin thành công!');
-        
+
         // Reload to update context
         window.location.reload();
       } else {
         alert('Lỗi: ' + (data.message || 'Không thể cập nhật thông tin'));
       }
     } catch (error) {
-      console.error('Update profile error:', error);
-      alert('Có lỗi xảy ra khi cập nhật thông tin');
     }
   };
 
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       alert("Mật khẩu xác nhận không khớp!");
       return;
@@ -149,18 +145,14 @@ const Profile = () => {
       const data = await response.json();
 
       if (data.success) {
-        alert('Đổi mật khẩu thành công!');
         setPasswordData({
           currentPassword: "",
           newPassword: "",
           confirmPassword: "",
         });
       } else {
-        alert('Lỗi: ' + (data.message || 'Không thể đổi mật khẩu'));
       }
     } catch (error) {
-      console.error('Change password error:', error);
-      alert('Có lỗi xảy ra khi đổi mật khẩu');
     }
   };
 
@@ -172,7 +164,7 @@ const Profile = () => {
         alert('Vui lòng chọn file ảnh!');
         return;
       }
-      
+
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         alert('Kích thước ảnh không được vượt quá 5MB!');
@@ -180,7 +172,7 @@ const Profile = () => {
       }
 
       setAvatarFile(file);
-      
+
       // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -253,22 +245,20 @@ const Profile = () => {
               <div className="space-y-2">
                 <button
                   onClick={() => setActiveTab("personal")}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "personal"
-                      ? "bg-[#ff5252] text-white shadow-md"
-                      : "text-gray-700 hover:bg-gray-100"
-                  }`}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${activeTab === "personal"
+                    ? "bg-[#ff5252] text-white shadow-md"
+                    : "text-gray-700 hover:bg-gray-100"
+                    }`}
                 >
                   <User size={18} />
                   Thông tin cá nhân
                 </button>
                 <button
                   onClick={() => setActiveTab("password")}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === "password"
-                      ? "bg-[#ff5252] text-white shadow-md"
-                      : "text-gray-700 hover:bg-gray-100"
-                  }`}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${activeTab === "password"
+                    ? "bg-[#ff5252] text-white shadow-md"
+                    : "text-gray-700 hover:bg-gray-100"
+                    }`}
                 >
                   <Lock size={18} />
                   Đổi mật khẩu

@@ -197,7 +197,7 @@ const Blog = () => {
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     className="w-full md:w-[320px] px-5 py-3 border border-gray-300 rounded-md 
-                                             focus:outline-none focus:ring-2 focus:ring-[#013b22] focus:border-transparent"
+                                            text-sm focus:outline-none focus:ring-2 focus:ring-[#013b22] focus:border-transparent"
                                 />
                                 <button
                                     type="submit"
@@ -297,8 +297,8 @@ const Blog = () => {
                                             
                                             <div className="flex items-center justify-between">
                                                 <div className="author flex items-center gap-2 text-[13px]">
-                                                    <FaUser className="text-gray-400" />
-                                                    <span>{post.author?.full_name || post.author || 'Admin'}</span>
+                                                    {/* <FaUser className="text-gray-400" /> */}
+                                                    {/* <span>{post.author?.full_name || post.author || 'Admin'}</span> */}
                                                 </div>
                                                 <Button className="!text-[#013b22] !text-[13px] !font-semibold">
                                                     Đọc thêm <FaArrowRight className="ml-1" />

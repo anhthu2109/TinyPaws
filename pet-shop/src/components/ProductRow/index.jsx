@@ -6,13 +6,11 @@ import 'swiper/css';
 import 'swiper/css/navigation';
 
 const ProductRow = ({ title, products, icon, category = 'noi-bat', linkTo, showViewAll = true }) => {
-    // Generate category slug from title or use linkTo prop
     const getViewAllLink = () => {
         if (linkTo) {
             return linkTo;
         }
-        
-        // Special handling for featured products
+
         if (title === 'Sản phẩm nổi bật' || category === 'featured') {
             return '/products?tag=featured';
         }
@@ -53,6 +51,7 @@ const ProductRow = ({ title, products, icon, category = 'noi-bat', linkTo, showV
                     slidesPerView={5}
                     slidesPerGroup={5}
                     spaceBetween={20}
+                    loop={false}
                     navigation={true}
                     modules={[Navigation]}
                     className="productSwiper"

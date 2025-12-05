@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { FaChevronLeft, FaChevronRight, FaStar, FaShoppingCart } from 'react-icons/fa';
 import { publicApi } from '../api/publicApi';
 
-const RelatedProducts = ({ currentProductId, userId }) => {
+const RelatedProducts = ({ currentProductId, userId, onRecommendationStatusChange = () => {} }) => {
     const [relatedProducts, setRelatedProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -11,29 +11,33 @@ const RelatedProducts = ({ currentProductId, userId }) => {
 
     useEffect(() => {
         const fetchRecommendations = async () => {
-            // Chỉ hiển thị nếu user đã đăng nhập
-            if (!userId) {
+            if (!currentProductId) {
                 setLoading(false);
+                onRecommendationStatusChange(false);
                 return;
             }
             
             try {
                 setLoading(true);
                 
-                const res = await publicApi.get(`/api/recommendations/${userId}?limit=8`);
-                if (res.data.success && res.data.data.products) {
-                    setRelatedProducts(res.data.data.products);
-                }
+                // Use new product detail API for content-based recommendations
+                const res = await publicApi.get(`/api/recommendations/product/${currentProductId}?limit=8`);
+                const products = res.data?.data?.products || [];
+                const isPersonalized = res.data?.fallback === false && products.length > 0;
+
+                setRelatedProducts(products);
+                onRecommendationStatusChange(isPersonalized);
                 
             } catch (err) {
-                console.error('Fetch recommendations error:', err);
+                console.error('Fetch product recommendations error:', err);
+                onRecommendationStatusChange(false);
             } finally {
                 setLoading(false);
             }
         };
         
         fetchRecommendations();
-    }, [userId]);
+    }, [currentProductId, onRecommendationStatusChange]);
 
     const formatPrice = (p) =>
         new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p);
@@ -54,11 +58,8 @@ const RelatedProducts = ({ currentProductId, userId }) => {
                 <div className="flex items-center justify-between mb-8">
                     <div>
                         <h2 className="text-3xl font-bold text-gray-900 mb-2">
-                            Gợi ý dành cho bạn
+                            Có thể bạn sẽ thích
                         </h2>
-                        <p className="text-gray-600">
-                            Dựa trên sở thích và hành vi mua sắm của bạn
-                        </p>
                     </div>
                     {relatedProducts.length > itemsPerView && (
                         <div className="flex space-x-2">

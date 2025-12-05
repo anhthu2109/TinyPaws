@@ -104,8 +104,8 @@ productSchema.virtual('formattedPrice').get(function() {
 // Static method to get bestsellers
 productSchema.statics.getBestsellers = function(limit = 10) {
     return this.find({ is_active: true, stock_quantity: { $gt: 0 } })
-        .select('name price sale_price images category stock_quantity sales_count bestseller_score is_active is_featured brand createdAt rating')
-        .sort({ sales_count: -1, bestseller_score: -1, createdAt: -1 })
+        .select('name price sale_price images category stock_quantity sales_count bestseller_score is_active is_featured brand createdAt updatedAt rating')
+        .sort({ sales_count: -1, bestseller_score: -1 })
         .limit(Math.min(parseInt(limit), 10))
         .populate('category', 'name type')
         .lean();
@@ -114,8 +114,8 @@ productSchema.statics.getBestsellers = function(limit = 10) {
 // Static method to get featured products
 productSchema.statics.getFeaturedProducts = function(limit = 10) {
     return this.find({ is_featured: true, is_active: true, stock_quantity: { $gt: 0 } })
-        .select('name price sale_price images category stock_quantity sales_count is_featured is_active brand createdAt rating')
-        .sort({ createdAt: -1 })
+        .select('name price sale_price images category stock_quantity sales_count is_featured is_active brand createdAt updatedAt rating')
+        .sort({ updatedAt: -1 })
         .limit(Math.min(parseInt(limit), 20))
         .populate('category', 'name type')
         .lean();

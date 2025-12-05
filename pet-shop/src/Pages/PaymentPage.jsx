@@ -301,10 +301,10 @@ const PaymentPage = () => {
 
     return (
         <PayPalScriptProvider options={paypalOptions}>
-            <div className="min-h-screen bg-gray-50 py-12">
+            <div className="min-h-screen bg-gray-50 py-3">
                 <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                     <h1 className="text-3xl font-bold text-gray-900">Đặt hàng</h1>
-                <div className="mt-8 grid gap-8 lg:grid-cols-3">
+                <div className="mt-2 grid gap-8 lg:grid-cols-3">
                     <section className="lg:col-span-2">
                         <div className="rounded-lg bg-white p-6 shadow">
                             <h2 className="text-xl font-semibold text-gray-900">
@@ -440,7 +440,7 @@ const PaymentPage = () => {
                     </section>
 
                     <aside className="space-y-6">
-                        <div className="rounded-lg bg-white p-6 shadow">
+                        <div className="rounded-lg bg-white p-4 shadow">
                             <h2 className="text-xl font-semibold text-gray-900">
                                 Tóm tắt đơn hàng
                             </h2>
@@ -472,21 +472,7 @@ const PaymentPage = () => {
                                 })}
                             </ul>
 
-                            <div className="mt-6 flex gap-3">
-                                <input
-                                    type="text"
-                                    placeholder="Nhập mã giảm giá"
-                                    className="flex-1 rounded-md border border-gray-300 px-4 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                />
-                                <button
-                                    type="button"
-                                    className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
-                                >
-                                    Áp dụng
-                                </button>
-                            </div>
-
-                            <div className="mt-6 space-y-3 text-sm text-gray-700">
+                            <div className="mt-3 space-y-3 text-sm text-gray-700">
                                 <div className="flex items-center justify-between">
                                     <span>Tổng phụ: {totalItems} mặt hàng</span>
                                     <span className="font-medium text-gray-900">
@@ -504,11 +490,11 @@ const PaymentPage = () => {
                             </div>
                         </div>
 
-                        <div className="rounded-lg bg-white p-6 shadow">
+                        <div className="rounded-lg bg-white p-3 shadow">
                             <h3 className="text-lg font-semibold text-gray-900">
                                 Phương thức thanh toán
                             </h3>
-                            <div className="mt-4 space-y-3 text-sm text-gray-700">
+                            <div className="mt-2 space-y-3 text-sm text-gray-700">
                                 <label className="flex items-center gap-3 cursor-pointer">
                                     <input
                                         type="radio"
@@ -535,7 +521,7 @@ const PaymentPage = () => {
                             {paymentMethod === "COD" && (
                                 <button
                                     type="button"
-                                    className="mt-6 w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
+                                    className="mt-2 w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
                                     onClick={handlePlaceOrder}
                                     disabled={isSubmitting || isFetchingProfile}
                                 >
@@ -545,7 +531,7 @@ const PaymentPage = () => {
                             
                             {/* PayPal Buttons */}
                             {paymentMethod === "PAYPAL" && (
-                                <div className="mt-6">
+                                <div className="mt-4">
                                     <PayPalButtons
                                         style={{ layout: "vertical" }}
                                         disabled={isFetchingProfile}

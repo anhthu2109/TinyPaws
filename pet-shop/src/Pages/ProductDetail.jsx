@@ -23,6 +23,7 @@ const ProductDetail = () => {
     const [quantity, setQuantity] = useState(1);
     const [selectedImageIndex, setSelectedImageIndex] = useState(0);
     const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+    const [hasPersonalizedRecommendations, setHasPersonalizedRecommendations] = useState(false);
 
     // Fetch product detail with fallback endpoints
     const fetchProduct = async () => {
@@ -148,6 +149,7 @@ const ProductDetail = () => {
             setSelectedImageIndex(0);
             setQuantity(1);
             setError('');
+            setHasPersonalizedRecommendations(false);
             
             // Scroll to top
             window.scrollTo(0, 0);
@@ -488,55 +490,55 @@ const ProductDetail = () => {
                 </div>
 
                 {/* Related Products */}
-                {relatedProducts.length > 0 && (
-                    <div className="mt-12">
-                        <h2 className="text-2xl font-bold text-gray-900 mb-6">Sản phẩm liên quan</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                            {relatedProducts.map((relatedProduct) => (
-                                <div
-                                    key={relatedProduct._id}
-                                    className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-                                    onClick={() => navigate(`/products/detail/${relatedProduct._id}`)}
-                                >
-                                    <div className="aspect-square bg-gray-100">
-                                        {relatedProduct.images && relatedProduct.images.length > 0 ? (
-                                            <img
-                                                src={getSafeImageUrl(relatedProduct.images, "300x300", relatedProduct.name)}
-                                                alt={relatedProduct.name}
-                                                className="w-full h-full object-cover"
-                                                onError={(e) => handleImageError(e, "300x300", relatedProduct.name)}
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center">
-                                                <FaHeart className="w-8 h-8 text-gray-300" />
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="p-4">
-                                        <h3 className="font-medium text-gray-900 mb-2 line-clamp-2">
-                                            {relatedProduct.name}
-                                        </h3>
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <span className="text-lg font-bold text-red-600">
-                                                    {formatPrice(relatedProduct.sale_price || relatedProduct.price)}
-                                                </span>
-                                                {relatedProduct.sale_price && (
-                                                    <span className="text-sm text-gray-500 line-through ml-2">
-                                                        {formatPrice(relatedProduct.price)}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <button className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
-                                                Xem
-                                            </button>
+            {!hasPersonalizedRecommendations && relatedProducts.length > 0 && (
+                <div className="mt-12">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-6">Sản phẩm liên quan</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {relatedProducts.map((relatedProduct) => (
+                            <div
+                                key={relatedProduct._id}
+                                className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+                                onClick={() => navigate(`/products/detail/${relatedProduct._id}`)}
+                            >
+                                <div className="aspect-square bg-gray-100">
+                                    {relatedProduct.images && relatedProduct.images.length > 0 ? (
+                                        <img
+                                            src={getSafeImageUrl(relatedProduct.images, "300x300", relatedProduct.name)}
+                                            alt={relatedProduct.name}
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => handleImageError(e, "300x300", relatedProduct.name)}
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center">
+                                            <FaHeart className="w-8 h-8 text-gray-300" />
                                         </div>
+                                    )}
+                                </div>
+                                <div className="p-4">
+                                    <h3 className="font-medium text-gray-900 mb-2 line-clamp-2">
+                                        {relatedProduct.name}
+                                    </h3>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <span className="text-lg font-bold text-red-600">
+                                                {formatPrice(relatedProduct.sale_price || relatedProduct.price)}
+                                            </span>
+                                            {relatedProduct.sale_price && (
+                                                <span className="text-sm text-gray-500 line-through ml-2">
+                                                    {formatPrice(relatedProduct.price)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <button className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
+                                            Xem
+                                        </button>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
+                            </div>
+                        ))}
                     </div>
-                )}
+                </div>
+            )}
             </div>
 
             {/* Image Modal */}
@@ -562,7 +564,11 @@ const ProductDetail = () => {
             )}
 
             {/* Related Products Section */}
-            <RelatedProducts currentProductId={id} userId={user?._id} />
+            <RelatedProducts
+                currentProductId={id}
+                userId={user?._id}
+                onRecommendationStatusChange={setHasPersonalizedRecommendations}
+            />
         </div>
     );
 };

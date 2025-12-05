@@ -239,25 +239,44 @@ const deleteConversation = async (req, res) => {
 // @access  Private/Admin
 const getAllConversations = async (req, res) => {
     try {
-        const {
-            page = 1,
-            limit = 20,
-            search
-        } = req.query;
+        const botUser = await User.findOne({ role: 'bot' }).lean();
+        const botUserId = botUser?._id;
 
-        // Get all users who have sent messages
-        const pipeline = [
+        // ⭐ SỬA: Lấy TẤT CẢ cuộc trò chuyện mà Admin tham gia
+        const conversations = await Message.aggregate([
+            {
+                $match: {
+                    $or: [
+                        { sender: req.user._id },
+                        { receiver: req.user._id }
+                    ]
+                }
+            },
+            {
+                $sort: { createdAt: -1 }
+            },
             {
                 $group: {
                     _id: {
-                        user1: { $min: ['$sender', '$receiver'] },
-                        user2: { $max: ['$sender', '$receiver'] }
+                        $cond: [
+                            { $eq: ['$sender', req.user._id] },
+                            '$receiver',
+                            '$sender'
+                        ]
                     },
-                    lastMessage: { $last: '$$ROOT' },
-                    messageCount: { $sum: 1 },
+                    lastMessage: { $first: '$$ROOT' },
                     unreadCount: {
                         $sum: {
-                            $cond: [{ $eq: ['$is_read', false] }, 1, 0]
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $eq: ['$receiver', req.user._id] },
+                                        { $eq: ['$is_read', false] }
+                                    ]
+                                },
+                                1,
+                                0
+                            ]
                         }
                     }
                 }
@@ -265,35 +284,23 @@ const getAllConversations = async (req, res) => {
             {
                 $lookup: {
                     from: 'users',
-                    localField: '_id.user1',
+                    localField: '_id',
                     foreignField: '_id',
-                    as: 'user1'
+                    as: 'otherUser'
                 }
             },
             {
-                $lookup: {
-                    from: 'users',
-                    localField: '_id.user2',
-                    foreignField: '_id',
-                    as: 'user2'
+                $unwind: '$otherUser'
+            },
+            // ⭐ THÊM: Lọc BỎ bot TRONG BƯỚC NÀY (sau khi đã lookup)
+            {
+                $match: {
+                    'otherUser.role': { $ne: 'bot' }
                 }
-            },
-            {
-                $unwind: '$user1'
-            },
-            {
-                $unwind: '$user2'
             },
             {
                 $project: {
-                    user1: {
-                        _id: 1,
-                        full_name: 1,
-                        email: 1,
-                        avatar: 1,
-                        role: 1
-                    },
-                    user2: {
+                    otherUser: {
                         _id: 1,
                         full_name: 1,
                         email: 1,
@@ -305,56 +312,25 @@ const getAllConversations = async (req, res) => {
                         content: 1,
                         createdAt: 1,
                         is_read: 1,
-                        message_type: 1
+                        message_type: 1,
+                        sender: 1
                     },
-                    messageCount: 1,
                     unreadCount: 1
                 }
             },
             {
                 $sort: { 'lastMessage.createdAt': -1 }
             }
-        ];
-
-        // Add search filter if provided
-        if (search) {
-            pipeline.unshift({
-                $match: {
-                    $or: [
-                        { 'sender.full_name': { $regex: search, $options: 'i' } },
-                        { 'receiver.full_name': { $regex: search, $options: 'i' } }
-                    ]
-                }
-            });
-        }
-
-        const conversations = await Message.aggregate(pipeline)
-            .skip((page - 1) * limit)
-            .limit(parseInt(limit));
-
-        const totalConversations = await Message.aggregate([
-            ...pipeline.slice(0, -1),
-            { $count: 'total' }
         ]);
-
-        const total = totalConversations[0]?.total || 0;
-        const totalPages = Math.ceil(total / parseInt(limit));
 
         res.json({
             success: true,
             data: {
-                conversations,
-                pagination: {
-                    currentPage: parseInt(page),
-                    totalPages,
-                    totalConversations: total,
-                    hasNextPage: parseInt(page) < totalPages,
-                    hasPrevPage: parseInt(page) > 1
-                }
+                conversations
             }
         });
     } catch (error) {
-        console.error('Get all conversations error:', error);
+        console.error('getAllConversations error:', error);
         res.status(500).json({
             success: false,
             message: 'Lỗi server',
@@ -383,23 +359,27 @@ const getAdminConversation = async (req, res) => {
             });
         }
 
-        const messages = await Message.getConversation(
-            req.user._id,
-            userId,
-            {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                sortOrder: sort_order === 'asc' ? 1 : -1
-            }
-        );
+        // ⭐ ADMIN LẤY TẤT CẢ TIN NHẮN (KHÔNG FILTER deleted_by_*)
+        const messages = await Message.find({
+            $or: [
+                { sender: req.user._id, receiver: userId },
+                { sender: userId, receiver: req.user._id }
+            ]
+        })
+            .sort({ createdAt: sort_order === 'asc' ? 1 : -1 })
+            .limit(parseInt(limit))
+            .skip((parseInt(page) - 1) * parseInt(limit))
+            .populate('sender', 'full_name avatar role email')
+            .populate('receiver', 'full_name avatar role email')
+            .lean();
 
-        // Mark messages as read (messages sent to admin)
+        // Mark messages as read
         await Message.markAsRead(userId, req.user._id);
 
         const totalMessages = await Message.countDocuments({
             $or: [
-                { sender: req.user._id, receiver: userId, deleted_by_sender: false },
-                { sender: userId, receiver: req.user._id, deleted_by_receiver: false }
+                { sender: req.user._id, receiver: userId },
+                { sender: userId, receiver: req.user._id }
             ]
         });
 
@@ -440,7 +420,6 @@ const getAdminConversation = async (req, res) => {
 // @access  Private/Admin
 const sendAdminMessage = async (req, res) => {
     try {
-        // Check for validation errors
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({
@@ -450,9 +429,17 @@ const sendAdminMessage = async (req, res) => {
             });
         }
 
-        const { receiver_id, content, message_type = 'text', attachment_url } = req.body;
+        // 🔥 SỬA: Hỗ trợ cả receiver_id và receiverId
+        const receiver_id = req.body.receiver_id || req.body.receiverId;
+        const { content, message_type = 'text', attachment_url } = req.body;
 
-        // Check if receiver exists
+        if (!receiver_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Thiếu receiver_id hoặc receiverId'
+            });
+        }
+
         const receiver = await User.findById(receiver_id);
         if (!receiver) {
             return res.status(404).json({
@@ -461,13 +448,13 @@ const sendAdminMessage = async (req, res) => {
             });
         }
 
-        // Create message
         const message = new Message({
             sender: req.user._id,
             receiver: receiver_id,
             content,
             message_type,
-            attachment_url
+            attachment_url,
+            is_bot: false
         });
 
         await message.save();
@@ -557,6 +544,68 @@ const getMessageStats = async (req, res) => {
     }
 };
 
+// GET /api/chat/history
+const getChatHistory = async (req, res) => {
+    try {
+        const userId = req.user?._id;
+        if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+        // ⭐ LẤY TẤT CẢ TIN NHẮN (Bot + Admin)
+        const messages = await Message.find({
+            $or: [
+                { sender: userId },
+                { receiver: userId }
+            ]
+        })
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .populate('sender', 'full_name role avatar email')
+            .populate('receiver', 'full_name role avatar email')
+            .lean();
+
+        const sortedMessages = messages.reverse();
+        const lastMsg = sortedMessages[sortedMessages.length - 1];
+        const currentSessionId = lastMsg?.session_id || `new_${new mongoose.Types.ObjectId()}`;
+
+        const normalizedMessages = sortedMessages.map((m) => {
+            let senderType = 'user';
+
+            if (m.is_bot) {
+                senderType = 'bot';
+            } else if (m.sender?._id?.toString() === userId.toString()) {
+                senderType = 'user';
+            } else if (m.sender?.role === 'admin') {
+                senderType = 'admin';
+            }
+
+            return {
+                _id: m._id,
+                session_id: m.session_id,
+                sender: senderType,
+                content: m.content,
+                createdAt: m.createdAt,
+                is_bot: m.is_bot || false,
+                intent: m.intent,
+                meta: m.meta || {},
+                fallback: m.meta?.fallback || false,
+                sender_info: m.sender
+            };
+        });
+
+        return res.json({
+            success: true,
+            data: {
+                session_id: currentSessionId,
+                messages: normalizedMessages
+            }
+        });
+
+    } catch (error) {
+        console.error('getChatHistory error:', error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+};
+
 module.exports = {
     sendMessage,
     getUserConversation,
@@ -566,5 +615,6 @@ module.exports = {
     getAllConversations,
     getAdminConversation,
     sendAdminMessage,
-    getMessageStats
+    getMessageStats,
+    getChatHistory
 };

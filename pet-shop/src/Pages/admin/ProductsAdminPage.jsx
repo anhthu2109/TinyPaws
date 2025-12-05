@@ -8,7 +8,7 @@ import axios from 'axios';
 
 const ProductsAdminPage = () => {
     const navigate = useNavigate();
-    
+
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
     const [showFilters, setShowFilters] = useState(false);
@@ -17,11 +17,12 @@ const ProductsAdminPage = () => {
         status: 'all',
         stock: 'all'
     });
-    
+
     const [categories, setCategories] = useState([]);
     const [loadingCategories, setLoadingCategories] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [productToDelete, setProductToDelete] = useState(null);
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -38,7 +39,7 @@ const ProductsAdminPage = () => {
                 setLoadingCategories(false);
             }
         };
-        
+
         fetchCategories();
     }, []);
 
@@ -50,21 +51,28 @@ const ProductsAdminPage = () => {
         navigate(`/admin/products/edit/${product._id}`);
     };
 
-    const handleDeleteProduct = async (product) => {
-        const confirmed = window.confirm(
-            `Bạn có chắc chắn muốn xóa sản phẩm "${product.name}"?\n\nHành động này không thể hoàn tác.`
-        );
+    const handleDeleteProduct = (product) => {
+        setProductToDelete(product);
+    };
 
-        if (!confirmed) return;
+    const closeDeleteModal = () => {
+        if (!loading) {
+            setProductToDelete(null);
+        }
+    };
+
+    const confirmDeleteAction = async () => {
+        if (!productToDelete) return;
 
         try {
             setLoading(true);
             setError('');
 
-            const response = await adminProductsApi.deleteProduct(product._id);
+            const response = await adminProductsApi.deleteProduct(productToDelete._id);
 
             if (response.data.success) {
                 setRefreshTrigger(prev => prev + 1);
+                setProductToDelete(null);
             }
         } catch (error) {
             const errorInfo = handleAdminApiError(error, 'Có lỗi xảy ra khi xóa sản phẩm');
@@ -106,7 +114,7 @@ const ProductsAdminPage = () => {
             {/* Header */}
             <div className="bg-white shadow">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center py-6">
+                    <div className="flex justify-between items-center py-4">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">
                                 Quản lý sản phẩm
@@ -221,7 +229,7 @@ const ProductsAdminPage = () => {
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Trạng thái
                                         </label>
-                                        <select 
+                                        <select
                                             value={filters.status}
                                             onChange={(e) => handleFilterChange('status', e.target.value)}
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -236,7 +244,7 @@ const ProductsAdminPage = () => {
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Tồn kho
                                         </label>
-                                        <select 
+                                        <select
                                             value={filters.stock}
                                             onChange={(e) => handleFilterChange('stock', e.target.value)}
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -271,7 +279,37 @@ const ProductsAdminPage = () => {
                 />
             </div>
 
-            
+            {productToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+                    <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+                        <h3 className="text-lg font-semibold text-gray-900 text-center">Xác nhận xóa sản phẩm</h3>
+                        <p className="mt-3 text-sm text-gray-600">
+                            Bạn có chắc chắn muốn xóa
+                            <span className="font-semibold text-gray-900"> "{productToDelete.name}"</span>? Hành động này
+                            không thể hoàn tác.
+                        </p>
+                        <div className="mt-6 flex items-center justify-between gap-3">
+                            <button
+                                type="button"
+                                onClick={closeDeleteModal}
+                                disabled={loading}
+                                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                                Hủy bỏ
+                            </button>
+                            <button
+                                type="button"
+                                onClick={confirmDeleteAction}
+                                disabled={loading}
+                                className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                                {loading ? 'Đang xóa...' : 'Xóa'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {loading && (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
                     <div className="bg-white p-6 rounded-lg shadow-lg flex items-center space-x-3">

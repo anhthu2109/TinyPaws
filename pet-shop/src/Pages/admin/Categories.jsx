@@ -9,7 +9,7 @@ const Categories = () => {
     const [showModal, setShowModal] = useState(false);
     const [editingCategory, setEditingCategory] = useState(null);
     const [expandedCategories, setExpandedCategories] = useState({});
-    
+
     const [formData, setFormData] = useState({
         name: '',
         description: '',
@@ -35,7 +35,7 @@ const Categories = () => {
             const response = await axios.get(`${CONFIG.API.BASE_URL}/api/categories`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            
+
             const data = response.data.success ? response.data.data : response.data;
             setCategories(data);
         } catch (error) {
@@ -48,10 +48,10 @@ const Categories = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         try {
             const token = localStorage.getItem('token');
-            
+
             if (editingCategory) {
                 // Update
                 await axios.put(
@@ -69,7 +69,7 @@ const Categories = () => {
                 );
                 alert('Thêm danh mục thành công!');
             }
-            
+
             fetchCategories();
             closeModal();
         } catch (error) {
@@ -80,13 +80,13 @@ const Categories = () => {
 
     const handleDelete = async (id) => {
         if (!window.confirm('Bạn có chắc muốn xóa danh mục này?')) return;
-        
+
         try {
             const token = localStorage.getItem('token');
             await axios.delete(`${CONFIG.API.BASE_URL}/api/categories/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            
+
             alert('Xóa danh mục thành công!');
             fetchCategories();
         } catch (error) {
@@ -137,12 +137,12 @@ const Categories = () => {
             alert('Vui lòng nhập tên danh mục con');
             return;
         }
-        
+
         setFormData(prev => ({
             ...prev,
             subcategories: [...prev.subcategories, { ...subcategoryForm }]
         }));
-        
+
         setSubcategoryForm({
             name: '',
             target: 'both',
@@ -226,9 +226,9 @@ const Categories = () => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Mô tả
                                 </th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                {/* <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Thao tác
-                                </th>
+                                </th> */}
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
@@ -278,7 +278,7 @@ const Categories = () => {
                                             {category.description || '-'}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-right">
+                                    {/* <td className="px-6 py-4 text-right">
                                         <div className="flex items-center justify-end gap-2">
                                             <button
                                                 onClick={() => openModal(category)}
@@ -295,7 +295,7 @@ const Categories = () => {
                                                 <Trash2 size={18} />
                                             </button>
                                         </div>
-                                    </td>
+                                    </td> */}
                                 </tr>
                             ))}
                         </tbody>
@@ -366,7 +366,7 @@ const Categories = () => {
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Danh mục con
                                 </label>
-                                
+
                                 {/* Add Subcategory Form */}
                                 <div className="bg-gray-50 p-4 rounded-lg mb-3">
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">

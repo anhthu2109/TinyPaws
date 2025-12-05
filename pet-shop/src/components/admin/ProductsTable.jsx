@@ -4,6 +4,8 @@ import adminApi from '../../api/adminApi';
 import { useAuth } from '../../context/AuthContext';
 import { getSafeImageUrl, handleImageError } from '../../utils/imageUtils';
 
+const ITEMS_PER_PAGE = 10;
+
 const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }) => {
     const { token, isAdmin } = useAuth();
     const [products, setProducts] = useState([]);
@@ -31,8 +33,8 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
             // Build query params with filters
             const params = {
                 page,
-                limit: 10,
-                sortBy: 'createdAt',
+                limit: ITEMS_PER_PAGE,
+                sortBy: 'updatedAt',
                 sortOrder: 'desc'
             };
 
@@ -64,13 +66,10 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
                 setCurrentPage(response.data.data.pagination.currentPage);
             }
         } catch (error) {
-            console.error(`Error fetching products (attempt ${retryCount + 1}):`, error);
-            
             // Check if it's a network error and we can retry
             const isNetworkError = !error.response || error.code === 'NETWORK_ERROR' || error.code === 'ECONNABORTED';
             
             if (isNetworkError && retryCount < maxRetries) {
-                console.log(`Retrying... (${retryCount + 1}/${maxRetries})`);
                 // Wait a bit before retrying (exponential backoff)
                 setTimeout(() => {
                     fetchProducts(page, retryCount + 1);
@@ -116,6 +115,14 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
         }
     }, [searchTerm, filters]);
 
+    const moveProductToTop = (productList, productId) => {
+        const updatedList = [...productList];
+        const index = updatedList.findIndex(p => p._id === productId);
+        if (index === -1) return updatedList;
+        const [item] = updatedList.splice(index, 1);
+        return [item, ...updatedList];
+    };
+
     // Toggle product status (active/inactive)
     const handleToggleStatus = async (product) => {
         try {
@@ -126,21 +133,21 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
             });
 
             if (response.data.success) {
-                console.log('✅ Product status updated successfully');
+                setError('');
                 
                 // Update local state
-                setProducts(prevProducts => 
-                    prevProducts.map(p => 
+                setProducts(prevProducts => {
+                    const mapped = prevProducts.map(p => 
                         p._id === product._id 
                             ? { ...p, is_active: newStatus }
                             : p
-                    )
-                );
+                    );
+                    return moveProductToTop(mapped, product._id);
+                });
                 
             }
         } catch (error) {
-            console.error('❌ Error toggling product status:', error);
-            alert('Có lỗi xảy ra khi cập nhật trạng thái sản phẩm');
+            setError('Có lỗi xảy ra khi cập nhật trạng thái sản phẩm');
         }
     };
 
@@ -154,21 +161,21 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
             });
 
             if (response.data.success) {
-                console.log('⭐ Product featured status updated successfully');
+                setError('');
                 
                 // Update local state
-                setProducts(prevProducts => 
-                    prevProducts.map(p => 
+                setProducts(prevProducts => {
+                    const mapped = prevProducts.map(p => 
                         p._id === product._id 
                             ? { ...p, is_featured: newFeaturedStatus }
                             : p
-                    )
-                );
+                    );
+                    return moveProductToTop(mapped, product._id);
+                });
                 
             }
         } catch (error) {
-            console.error('❌ Error toggling featured status:', error);
-            alert('Có lỗi xảy ra khi cập nhật trạng thái nổi bật');
+            setError('Có lỗi xảy ra khi cập nhật trạng thái nổi bật');
         }
     };
 
@@ -202,27 +209,31 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
         );
     }
 
-    if (error) {
-        return (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <p className="font-medium">Có lỗi xảy ra</p>
-                        <p className="text-sm mt-1">{error}</p>
+    const renderAlert = () => {
+        if (error) {
+            return (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 mb-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="font-medium">Có lỗi xảy ra</p>
+                            <p className="text-sm mt-1">{error}</p>
+                        </div>
+                        <button
+                            onClick={() => {
+                                setError('');
+                                fetchProducts(currentPage);
+                            }}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                        >
+                            Thử lại
+                        </button>
                     </div>
-                    <button
-                        onClick={() => {
-                            setError('');
-                            fetchProducts(currentPage);
-                        }}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-                    >
-                        Thử lại
-                    </button>
                 </div>
-            </div>
-        );
-    }
+            );
+        }
+
+        return null;
+    };
 
     return (
         <div className="bg-white rounded-lg shadow">
@@ -238,11 +249,18 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
                 </div>
             </div>
 
+            <div className="px-6 pt-4">
+                {renderAlert()}
+            </div>
+
             {/* Table */}
             <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                                STT
+                            </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Sản phẩm
                             </th>
@@ -269,7 +287,7 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
                     <tbody className="bg-white divide-y divide-gray-200">
                         {products.length === 0 ? (
                             <tr>
-                                <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
+                                <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
                                     <div className="flex flex-col items-center">
                                         <FaImage className="h-12 w-12 text-gray-300 mb-2" />
                                         <p>Chưa có sản phẩm nào</p>
@@ -277,8 +295,13 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
                                 </td>
                             </tr>
                         ) : (
-                            products.map((product) => (
+                            products.map((product, index) => {
+                                const serialNumber = (currentPage - 1) * ITEMS_PER_PAGE + index + 1;
+                                return (
                                 <tr key={product._id} className="hover:bg-gray-50">
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                                        {serialNumber}
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
                                             <div className="flex-shrink-0 h-12 w-12">
@@ -378,7 +401,8 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
                                         </div>
                                     </td>
                                 </tr>
-                            ))
+                            );
+                            })
                         )}
                     </tbody>
                 </table>

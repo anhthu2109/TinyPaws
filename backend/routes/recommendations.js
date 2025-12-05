@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
     getRecommendations,
+    getProductDetailRecommendations,
     trackProductView,
     addToWishlist,
     removeFromWishlist,
@@ -16,6 +17,9 @@ const { auth } = require('../middleware/auth');
 
 // Get recommendations for user
 router.get('/:userId', getRecommendations);
+
+// Get product detail page recommendations (content-based)
+router.get('/product/:productId', getProductDetailRecommendations);
 
 // Track user behavior
 router.post('/track/view', trackProductView);

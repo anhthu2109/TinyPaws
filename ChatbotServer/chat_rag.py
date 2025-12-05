@@ -125,7 +125,7 @@ class PetChatRAG:
         print("Chatbot ready with new embeddings!")
 
     # === Retrieval ===
-    def find_relevant_answers(self, query, k=3):
+    def find_relevant_products(self, query, k=3):
         query_emb = self.get_embedding(query)
         if query_emb is None:
             return pd.DataFrame(), []
@@ -136,8 +136,18 @@ class PetChatRAG:
         return self.df.iloc[I[0]], D[0]
 
     # === Generation ===
-    def generate_answer(self, query, relevant_data):
+    def generate_answer(self, query, relevant_data, animal_type=None):
         context = "\n".join(relevant_data["answers"].tolist())
+        
+        # --- LOGIC FILTER ĐỘNG VẬT ---
+        animal_instruction = ""
+        if animal_type:
+            animal_instruction = f"""
+            🚨 YÊU CẦU VỀ ĐỘNG VẬT:
+            - Khách hỏi về: {animal_type.upper()}.
+            - CHỈ trả lời thông tin liên quan đến {animal_type}.
+            """
+        
         prompt = f"""
         Bạn là trợ lý AI chuyên về Thú Cưng (TinyPaws).
         
@@ -151,6 +161,8 @@ class PetChatRAG:
            
         2. CHỈ TRẢ LỜI KHI: Câu hỏi liên quan đến chó, mèo, thú cưng.
         
+        {animal_instruction}
+        
         Thông tin tham khảo (Dành cho thú cưng):
         {context}
 
@@ -159,60 +171,140 @@ class PetChatRAG:
         return self.llm_generate_with_retry(prompt)
 
     # === Chat (Đã sửa để nhận diện Chào hỏi xã giao) ===
-    def chat(self, query, k=3):
+    def chat(self, query, history=None, k=8):
         start = time.time()
-        
-        # Tìm kiếm dữ liệu liên quan
-        relevant, scores = self.find_relevant_answers(query, k)
-
-        max_sim = max(scores) if len(scores) else 0.0
-        print(f"Max similarity = {max_sim:.3f} (threshold = {self.similarity_threshold})")
-
         query_lower = query.lower()
+        import re
 
-        # 1. Từ khóa chuyên môn (Giữ nguyên)
-        PET_KEYWORDS = ["chó", "cho", "cún", "mèo", "meo", "pet", "thú cưng",
-                        "rối loạn", "bệnh", "chăm sóc", "ăn", "thức ăn", "khẩu phần",
-                        "tắm", "spa", "sức khỏe", "huấn luyện", "khám", "chó con"]
-        is_pet_query = any(kw in query_lower for kw in PET_KEYWORDS)
+        # --- 1. BỘ LỌC Ý ĐỊNH GẶP NHÂN VIÊN ---
+        support_keywords = [
+            "gặp nhân viên", "nói chuyện với người", "chat với admin", "tư vấn trực tiếp",
+            "gặp tư vấn viên", "gặp người thật", "khiếu nại", "đơn hàng", "bom hàng",
+            "hoàn tiền", "đổi trả", "ship lâu", "chưa nhận được", "giao sai", "giao chưa",
+            "nhân viên hỗ trợ", "liên hệ shop", "alo shop", "chủ shop"
+        ]
+        
+        for kw in support_keywords:
+            if kw in query_lower:
+                return {
+                    "response": "Bạn vui lòng nhấn nút **'Liên hệ nhân viên hỗ trợ'** bên dưới để gặp nhân viên hỗ trợ nhé!",
+                    "sources": [],
+                    "fallback": True,
+                    "processing_time": 0,
+                    "max_similarity": 1.0
+                }
 
-        # 2. THÊM MỚI: Từ khóa chào hỏi / Xã giao
-        GREETING_KEYWORDS = ["hi", "hello", "chào", "alo", "ơi", "shop", "ad", "admin", "bot", "giúp", "hú", "bạn ơi"]
+        # --- 2. XỬ LÝ CÂU HỎI THÔNG TIN CHUNG (GIỜ, ĐỊA CHỈ) ---
+        general_info = {
+            "giờ": "TinyPaws mở cửa từ 9:00 sáng đến 9:00 tối tất cả các ngày trong tuần ạ!",
+            "mở cửa": "TinyPaws mở cửa từ 9:00 sáng đến 9:00 tối tất cả các ngày trong tuần ạ!",
+            "địa chỉ": "TinyPaws có địa chỉ tại: Lạc Long Quân, Điện Dương, Điện Bàn, Quảng Nam nha!",
+            "ở đâu": "TinyPaws có địa chỉ tại: Lạc Long Quân, Điện Dương, Điện Bàn, Quảng Nam nha!",
+            "sđt": "Hotline: 0765234567. Zalo: 0765234567",
+            "điện thoại": "Hotline: 0765234567. Zalo: 0765234567"
+        }
+        
+        for key, answer in general_info.items():
+            if key in query_lower:
+                return { "response": answer, "sources": [], "fallback": False, "processing_time": 0, "max_similarity": 1.0 }
+
+        # --- 3. XỬ LÝ NGỮ CẢNH LỊCH SỬ ---
+        context_query = query_lower
+        recent_history = []
+        if history and len(history) > 0:
+            recent_history = history[-6:]
+            recent_user_turns = [item["content"] for item in recent_history if item["role"] == "user"]
+            if recent_user_turns:
+                full_context = " ".join(recent_user_turns) + " " + query_lower
+                context_query = full_context.lower()
+
+        # Phát hiện động vật
+        animal_type = None
+        meo_pattern = r'\b(mèo|meo|cat|kitten)\b'
+        cho_pattern = r'\b(chó|cho|dog|puppy|poodle|golden|corgi|husky|beagle)\b'
+        
+        if re.search(meo_pattern, context_query):
+            animal_type = "Mèo"
+        elif re.search(cho_pattern, context_query):
+            if "mèo" not in context_query and "meo" not in context_query:
+                animal_type = "Chó"
+
+        # --- 4. TÌM KIẾM VÀ LỌC SẢN PHẨM (RAG) ---
+        relevant, scores = self.find_relevant_products(context_query, k)
+        max_score = float(max(scores)) if len(scores) else 0.0
+        
+        GREETING_KEYWORDS = ["hi", "hello", "chào", "alo", "ơi", "bot", "shop", "ad", "admin", "hỗ trợ"]
         is_greeting = any(kw in query_lower for kw in GREETING_KEYWORDS)
 
-        # 3. LOGIC CHẶN (Sửa lại điều kiện lọc)
-        # Chặn nếu: (Không phải từ khóa Pet VÀ Không phải chào hỏi)
-        # HOẶC: (Điểm similarity thấp VÀ Không phải chào hỏi)
-        if (not is_pet_query and not is_greeting) or (max_sim < self.similarity_threshold and not is_greeting):
+        if not relevant.empty:
+            # A. BỘ LỌC DANH MỤC CỨNG (Hard Category Filter)
+            # Fix lỗi hỏi Đồ chơi ra Bánh thưởng
+            category_rules = {
+                "đồ chơi": ["Đồ chơi", "Phụ kiện", "Dụng cụ"],
+                "nhà cây": ["Đồ chơi", "Phụ kiện", "Chuồng"],
+                "cat tree": ["Đồ chơi", "Phụ kiện", "Chuồng"],
+                "thức ăn": ["Thức ăn", "Hạt", "Pate", "Bánh thưởng", "Súp"],
+                "hạt": ["Thức ăn", "Hạt"],
+                "pate": ["Thức ăn", "Pate"],
+                "bánh thưởng": ["Thức ăn", "Bánh thưởng"],
+                "thuốc": ["Thuốc", "Y tế", "Chăm sóc sức khỏe", "Dinh dưỡng"],
+                "trị ve": ["Thuốc", "Y tế", "Chăm sóc sức khỏe", "Vệ sinh"],
+                "sữa tắm": ["Vệ sinh", "Mỹ phẩm"],
+                "cát": ["Vệ sinh", "Cát vệ sinh"]
+            }
+            
+            detected_categories = []
+            for keyword, valid_cats in category_rules.items():
+                if keyword in query_lower:
+                    detected_categories.extend(valid_cats)
+            
+            if detected_categories:
+                # Hàm kiểm tra xem sản phẩm có thuộc danh mục cho phép không
+                def check_category_match(row):
+                    full_txt = str(row.get('full_text', '')).lower()
+                    cat_col = str(row.get('category', '')).lower()
+                    # Kiểm tra trong cột Category hoặc trong Full Text có chứa từ khóa loại
+                    return any(t.lower() in cat_col or f"loại: {t.lower()}" in full_txt for t in detected_categories)
+
+                filtered_relevant = relevant[relevant.apply(check_category_match, axis=1)]
+                
+                # Chỉ áp dụng lọc nếu lọc xong vẫn còn sản phẩm (tránh lọc nhầm hết sạch)
+                # Hoặc nếu ý định quá rõ ràng (như "thuốc") mà shop không có thì chấp nhận rỗng
+                if not filtered_relevant.empty or "thuốc" in query_lower or "trị ve" in query_lower:
+                    relevant = filtered_relevant
+                    if relevant.empty:
+                         print(f"Đã lọc theo danh mục {detected_categories} nhưng không có SP nào.")
+
+        if not relevant.empty:
+            # B. BỘ LỌC THƯƠNG HIỆU - XÓA ĐI
+            # (Chỉ giữ lại logic lọc danh mục nếu cần)
+            pass
+
+        # --- 5. KIỂM TRA KẾT QUẢ ---
+        if relevant.empty or max_score < self.similarity_threshold:
+            is_greeting = any(kw in query_lower for kw in ["hi", "hello", "chào", "bạn ơi"])
+            if is_greeting:
+                greeting_prompt = f"""
+                Người dùng: "{query}"
+                Bạn là trợ lý TinyPaws. Hãy chào thân thiện, ngắn gọn.
+                """
+                return { "response": self.llm_generate_with_retry(greeting_prompt), "sources": [], "fallback": False, "processing_time": 0, "max_similarity": 0 }
+
             return {
-                "response": "TinyPaws chỉ hỗ trợ các vấn đề về thú cưng. "
-                            "Bạn có thể hỏi về chăm sóc chó mèo nhé!",
-                "similar_documents": [],
+                "response": "Dạ em tìm trong kho thì chưa thấy thông tin phù hợp ạ.\nBạn có muốn **chat trực tiếp với nhân viên** để được tư vấn kỹ hơn không?",
+                "sources": [],
+                "fallback": True,
                 "processing_time": round(time.time() - start, 2),
-                "max_similarity": round(max_sim, 3)
+                "max_similarity": max_score
             }
 
-        # 4. XỬ LÝ TRẢ LỜI
-        # Trường hợp A: Chỉ là câu chào hỏi xã giao (Điểm thấp, không tìm thấy dữ liệu y tế)
-        if is_greeting and max_sim < self.similarity_threshold:
-            prompt = f"""
-            Người dùng nói: "{query}"
-            Bạn là chuyên gia chăm sóc thú cưng (AI) của TinyPaws.
-            Hãy chào lại người dùng một cách thân thiện, ngắn gọn, dùng emoji 🐾.
-            Gợi ý họ có thể hỏi về: sức khỏe, dinh dưỡng, hoặc cách huấn luyện chó mèo.
-            """
-            answer = self.llm_generate_with_retry(prompt)
-            docs = []
-
-        # Trường hợp B: Có nội dung chuyên môn (Điểm cao hoặc có từ khóa Pet)
-        else:
-            # Dùng hàm generate_answer có sẵn để trả lời dựa trên Knowledge Base
-            answer = self.generate_answer(query, relevant)
-            docs = relevant[["question", "answers"]].replace({np.nan: None}).to_dict("records")
-
+        # --- 6. TẠO CÂU TRẢ LỜI ---
+        answer = self.generate_answer(query, relevant, animal_type)
+        
         return {
             "response": answer,
-            "similar_documents": docs,
+            "sources": [],  # ⭐ Để rỗng vì PetRAG không trả về sản phẩm
+            "fallback": False,
             "processing_time": round(time.time() - start, 2),
-            "max_similarity": round(max_sim, 3)
+            "max_similarity": max_score
         }

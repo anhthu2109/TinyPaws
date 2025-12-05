@@ -137,7 +137,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const value = {
-        user,
+        user, // ⭐ Đảm bảo export user object
         token,
         loading,
         login,

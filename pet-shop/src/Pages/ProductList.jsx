@@ -7,40 +7,66 @@ import { Button, Pagination } from '@mui/material';
 import axios from 'axios';
 import { CONFIG } from '../constants/config';
 
+const CATEGORY_BATCH_SIZE = 12;
+const BRAND_PREVIEW_LIMIT = 5;
+const TAG_PREVIEW_LIMIT = 10;
+
+const brandOptions = {
+    cho: ['Royal Canin','Goodies', 'Orgo', 'SmartHeart', 'Ganador', 'ANF', 'Zenith', 'Pedigree', 'DoggyMan'],
+
+    meo: ['Royal Canin', 'Whiskas', 'Me-O', 'Silver Spoon', 'Zoi Cat', 'Ciao', 'PetQ', 'MRVET', 'Wanpy '],
+
+    'san-pham-ve-sinh': ['Yu', 'Maneki Neko'],
+
+    'ca-cho-va-meo': ['Bioline', 'TaoTaoPets', 'Shizuka']
+};
+
+const normalizeTarget = (targetValue) => {
+    const value = (targetValue || '').toString().toLowerCase();
+    const targetMap = {
+        'dog': 'dog',
+        'cho': 'dog',
+        'cat': 'cat',
+        'meo': 'cat',
+        'both': 'both',
+        'all': 'both',
+        'ca-cho-va-meo': 'both',
+        'ca cho va meo': 'both'
+    };
+    return targetMap[value] || 'both';
+};
+
 const ProductList = () => {
     const { category } = useParams();
     const [searchParams, setSearchParams] = useSearchParams();
+    const isPetCategoryPage = category === 'cho' || category === 'meo';
     
-    // Get query parameters
     const sortParam = searchParams.get('sort');
     const tagParam = searchParams.get('tag');
     
-    // States
     const [products, setProducts] = useState([]);
     const [filteredProducts, setFilteredProducts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+    const [viewMode, setViewMode] = useState('grid');
     const [currentPage, setCurrentPage] = useState(1);
     const [productsPerPage] = useState(CONFIG.APP.ITEMS_PER_PAGE);
-    
-    // Filter states
-    const [sortBy, setSortBy] = useState('name');
-    const [sortOrder, setSortOrder] = useState('asc');
+    const [visibleProductsCount, setVisibleProductsCount] = useState(CATEGORY_BATCH_SIZE);
+
+    const [sortBy, setSortBy] = useState('updatedAt');
+    const [sortOrder, setSortOrder] = useState('desc');
     const [selectedBrands, setSelectedBrands] = useState([]);
     const [selectedCategories, setSelectedCategories] = useState([]);
     const [selectedTags, setSelectedTags] = useState([]);
     const [minPrice, setMinPrice] = useState('');
     const [maxPrice, setMaxPrice] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    
-    // Data for filters
+    const [showAllBrands, setShowAllBrands] = useState(false);
+    const [showAllTags, setShowAllTags] = useState(false);
+
     const [categories, setCategories] = useState([]);
     const [allTags, setAllTags] = useState([]);
 
-
-    // Get page title based on category and query params
     const getPageTitle = () => {
-        // Priority: query params > category
         if (sortParam === 'bestseller') {
             return 'Sản phẩm bán chạy nhất';
         }
@@ -57,7 +83,6 @@ const ProductList = () => {
             return 'Sản phẩm mới';
         }
         
-        // Fallback to category-based titles
         const categoryTitles = {
             'noi-bat': 'Sản phẩm nổi bật',
             'cho': 'Sản phẩm cho chó',
@@ -72,107 +97,98 @@ const ProductList = () => {
         return categoryTitles[category] || 'Tất cả sản phẩm';
     };
 
-    // Load categories and tags
     useEffect(() => {
         const loadFilterData = async () => {
             try {
-                // Load categories
                 const categoriesRes = await axios.get(`${CONFIG.API.BASE_URL}/api/categories`);
                 if (categoriesRes.data.success) {
                     setCategories(categoriesRes.data.data);
                 }
             } catch (error) {
-                // Error loading filter data
             }
         };
         loadFilterData();
     }, []);
 
-    // Load products based on category and query params
     useEffect(() => {
         setLoading(true);
-        
-        // Real API call with query parameters
+
         const loadProducts = async () => {
+            console.log('Loading products with params:', { tagParam, sortParam, category });
             try {
-                // Determine API endpoint and params based on query params
                 let apiUrl = `${CONFIG.API.BASE_URL}/api/products`;
-                let apiParams = {};
-                
-                // If tag=featured, use featured products endpoint
+                let apiParams = {
+                    limit: isPetCategoryPage ? 120 : CONFIG.APP.ITEMS_PER_PAGE * 5
+                };
+
                 if (tagParam === 'featured') {
-                    apiUrl = `${CONFIG.API.BASE_URL}/api/products/featured`;
-                    apiParams.limit = 100; // Get more featured products
+                    apiParams.tag = 'featured';
+                    apiParams.limit = 100;
                 }
-                // If sort=bestseller, fetch with bestseller sort
                 else if (sortParam === 'bestseller') {
                     apiParams.sort = 'bestseller';
                     apiParams.limit = 100;
                 }
-                // If tag=new, fetch recent products
                 else if (tagParam === 'new' || tagParam === 'new_arrivals') {
                     apiParams.sort = 'createdAt';
                     apiParams.limit = 100;
                 }
-                
-                // Fetch products
+
+                if (isPetCategoryPage) {
+                    apiParams.limit = 500;
+                }
+
                 const response = await axios.get(apiUrl, { params: apiParams });
                 
                 if (response.data.success && response.data.data.products) {
                     let allProducts = response.data.data.products;
-                    
-                    // Transform API data to match component format
-                    const transformedProducts = allProducts.map(product => ({
+
+                    const transformedProducts = allProducts.map(product => {
+                        const normalizedTarget = normalizeTarget(product.target);
+                        const fallbackBrand = product.brand?.trim();
+                        return {
                         id: product._id,
                         name: product.name,
                         category: product.category?.name || 'Chưa phân loại',
-                        brand: product.brand, // Use actual brand from product
-                        // Use sale_price as current price if available; original price becomes oldPrice
+                        brand: fallbackBrand,
                         price: product.sale_price ?? product.price,
                         oldPrice: product.sale_price ? product.price : null,
                         image: product.images?.[0] || 'https://placehold.co/400x400?text=No+Image',
-                        rating: 4.5, // Default rating (until review system implemented)
+                        rating: 4.5,
                         reviews: Math.floor(Math.random() * 200) + 10, // Random reviews for demo
                         stock: product.stock_quantity,
                         isNew: new Date(product.createdAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-                        target: product.target || 'both', // Add target field
-                        tags: product.tags || [], // Add tags from DB
-                        createdAt: product.createdAt, // Keep original createdAt for filtering
-                        salesCount: product.sales_count || 0 // Add sales_count for sorting
-                    }));
-                    
-                    // Filter products based on query params and category
+                        target: normalizedTarget,
+                        tags: product.tags || [], 
+                        createdAt: product.createdAt, 
+                        updatedAt: product.updatedAt || product.createdAt,
+                        salesCount: product.sales_count || 0,
+                        is_featured: product.is_featured || false
+                    }});
+
                     let filteredProducts = transformedProducts;
-                    
-                    // Priority 1: Filter by special query params (featured, bestseller, new)
-                    // These should show ALL matching products regardless of category
+
                     if (tagParam === 'featured') {
-                        // Already filtered by API, no additional filter needed
-                        // filteredProducts = transformedProducts (all featured products)
+                        console.log('Featured products count:', transformedProducts.length);
+                        console.log('Featured products:', transformedProducts.map(p => ({ id: p.id, name: p.name, is_featured: p.is_featured })));
                     } else if (sortParam === 'bestseller') {
-                        // Already sorted by API, no additional filter needed
-                        // filteredProducts = transformedProducts (all bestsellers)
                     } else if (tagParam === 'new' || tagParam === 'new_arrivals') {
-                        // Filter new products (created in last 30 days)
                         filteredProducts = transformedProducts.filter(product => {
                             return product.isNew === true;
                         });
                     } 
-                    // Priority 2: Filter by category (only if no special query params)
                     else if (category && category !== 'all') {
-                        // Filter by target field from DB
                         if (category === 'cho') {
-                            // Show products for dogs (target = 'dog' or 'both')
+                            const dogTargets = ['dog', 'both'];
                             filteredProducts = transformedProducts.filter(product => 
-                                product.target === 'dog' || product.target === 'both'
+                                dogTargets.includes(product.target)
                             );
                         } else if (category === 'meo') {
-                            // Show products for cats (target = 'cat' or 'both')
+                            const catTargets = ['cat', 'both'];
                             filteredProducts = transformedProducts.filter(product => 
-                                product.target === 'cat' || product.target === 'both'
+                                catTargets.includes(product.target)
                             );
                         } else {
-                            // For other categories, filter by category name
                             const categoryMap = {
                                 'thuc-an': 'Thức ăn',
                                 'phu-kien': 'Phụ kiện',
@@ -191,8 +207,7 @@ const ProductList = () => {
                     
                     setProducts(filteredProducts);
                     setFilteredProducts(filteredProducts);
-                    
-                    // Extract unique tags from filtered products
+
                     const tags = new Set();
                     filteredProducts.forEach(product => {
                         if (product.tags && Array.isArray(product.tags)) {
@@ -205,12 +220,10 @@ const ProductList = () => {
                     });
                     setAllTags([...tags]);
                 } else {
-                    // No products found
                     setProducts([]);
                     setFilteredProducts([]);
                 }
             } catch (error) {
-                // Show empty state on error
                 setProducts([]);
                 setFilteredProducts([]);
             } finally {
@@ -219,13 +232,11 @@ const ProductList = () => {
         };
         
         loadProducts();
-    }, [category, sortParam, tagParam]);
+    }, [category, sortParam, tagParam, isPetCategoryPage]);
 
-    // Apply filters and sorting
     useEffect(() => {
         let filtered = [...products];
 
-        // Search filter
         if (searchTerm) {
             filtered = filtered.filter(product =>
                 product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -233,52 +244,45 @@ const ProductList = () => {
             );
         }
 
-        // Categories filter (multiple)
         if (selectedCategories.length > 0) {
             filtered = filtered.filter(product => 
                 selectedCategories.includes(product.category)
             );
         }
 
-        // Price filter (min/max inputs)
         const min = minPrice ? parseInt(minPrice) : 0;
         const max = maxPrice ? parseInt(maxPrice) : Infinity;
         filtered = filtered.filter(product =>
             product.price >= min && product.price <= max
         );
 
-        // Brands filter (multiple)
         if (selectedBrands.length > 0) {
             filtered = filtered.filter(product => 
                 selectedBrands.includes(product.brand)
             );
         }
         
-        // Tags filter (multiple)
         if (selectedTags.length > 0) {
             filtered = filtered.filter(product => 
                 product.tags && product.tags.some(tag => selectedTags.includes(tag))
             );
         }
 
-        // Sort
         filtered.sort((a, b) => {
             let aValue = a[sortBy];
             let bValue = b[sortBy];
             
-            // Numeric sorting for price, salesCount
             if (sortBy === 'price' || sortBy === 'salesCount') {
                 return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
             }
             
-            // Date sorting for createdAt
+            if (sortBy === 'createdAt')
             if (sortBy === 'createdAt') {
                 const dateA = new Date(aValue);
                 const dateB = new Date(bValue);
                 return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
             }
             
-            // String sorting for other fields
             if (sortOrder === 'asc') {
                 return aValue > bValue ? 1 : -1;
             } else {
@@ -288,20 +292,46 @@ const ProductList = () => {
 
         setFilteredProducts(filtered);
         setCurrentPage(1);
-    }, [products, searchTerm, selectedCategories, minPrice, maxPrice, selectedBrands, selectedTags, sortBy, sortOrder]);
+        if (isPetCategoryPage) {
+            setVisibleProductsCount(CATEGORY_BATCH_SIZE);
+        }
+    }, [products, searchTerm, selectedCategories, minPrice, maxPrice, selectedBrands, selectedTags, sortBy, sortOrder, category, isPetCategoryPage]);
 
-    // Pagination
     const indexOfLastProduct = currentPage * productsPerPage;
     const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
     const currentProducts = filteredProducts.slice(indexOfFirstProduct, indexOfLastProduct);
     const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
 
     // Get unique brands (filter out null/undefined)
-    const brands = [...new Set(products.map(product => product.brand).filter(Boolean))];
+    let brands = [...new Set(products.map(product => product.brand).filter(Boolean))];
+    
+    // For cho/meo pages, filter brands by category
+    if (isPetCategoryPage) {
+        const validBrands = new Set([
+            ...(brandOptions.cho || []),
+            ...(brandOptions.meo || []),
+            ...(brandOptions['ca-cho-va-meo'] || [])
+        ]);
+        brands = brands.filter(brand => validBrands.has(brand));
+    }
+    
+    const hasMoreBrands = brands.length > BRAND_PREVIEW_LIMIT;
+    const visibleBrands = showAllBrands || !hasMoreBrands
+        ? brands
+        : brands.slice(0, BRAND_PREVIEW_LIMIT);
+
+    const hasMoreTags = allTags.length > TAG_PREVIEW_LIMIT;
+    const visibleTags = showAllTags || !hasMoreTags
+        ? allTags
+        : allTags.slice(0, TAG_PREVIEW_LIMIT);
 
     const handlePageChange = (event, value) => {
         setCurrentPage(value);
         window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleLoadMore = () => {
+        setVisibleProductsCount(prev => Math.min(prev + CATEGORY_BATCH_SIZE, filteredProducts.length));
     };
 
     const resetFilters = () => {
@@ -311,8 +341,10 @@ const ProductList = () => {
         setMaxPrice('');
         setSelectedBrands([]);
         setSelectedTags([]);
-        setSortBy('name');
-        setSortOrder('asc');
+        setSortBy('updatedAt');
+        setSortOrder('desc');
+        setShowAllBrands(false);
+        setShowAllTags(false);
     };
     
     const toggleCategory = (categoryName) => {
@@ -340,7 +372,6 @@ const ProductList = () => {
     };
     
     const applyPriceFilter = () => {
-        // Trigger re-filter by updating state
         setCurrentPage(1);
     };
 
@@ -365,9 +396,7 @@ const ProductList = () => {
                             <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
                                 {getPageTitle()}
                             </h1>
-                            <p className="text-gray-600 mt-1">
-                                Tìm thấy {filteredProducts.length} sản phẩm
-                            </p>
+                            <p className="text-gray-600 mt-1"></p>
                         </div>
                         
                         {/* View Mode Toggle */}
@@ -410,21 +439,6 @@ const ProductList = () => {
                                 </Button>
                             </div>
 
-                            {/* Search */}
-                            <div className="mb-6">
-                                <label className="block text-sm font-medium mb-2">Tìm kiếm</label>
-                                <div className="relative">
-                                    <input
-                                        type="text"
-                                        placeholder="Tìm sản phẩm..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                                    />
-                                    <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                                </div>
-                            </div>
-
                             {/* Category Filter - Checkbox List */}
                             <div className="mb-6">
                                 <h4 className="text-sm font-semibold mb-3">Theo Danh Mục</h4>
@@ -447,7 +461,7 @@ const ProductList = () => {
                             <div className="mb-6">
                                 <h4 className="text-sm font-semibold mb-3">Thương Hiệu</h4>
                                 <div className="space-y-2">
-                                    {brands.map(brand => (
+                                    {visibleBrands.map(brand => (
                                         <label key={brand} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
                                             <input
                                                 type="checkbox"
@@ -459,6 +473,14 @@ const ProductList = () => {
                                         </label>
                                     ))}
                                 </div>
+                                {hasMoreBrands && (
+                                    <button
+                                        onClick={() => setShowAllBrands(prev => !prev)}
+                                        className="mt-3 text-sm font-medium text-red-500 hover:text-red-600"
+                                    >
+                                        {showAllBrands ? 'Thu gọn' : 'Thêm'}
+                                    </button>
+                                )}
                             </div>
 
                             {/* Tags Filter - Hashtag Pills */}
@@ -466,7 +488,7 @@ const ProductList = () => {
                                 <div className="mb-6">
                                     <h4 className="text-sm font-semibold mb-3">Filter By Tag</h4>
                                     <div className="flex flex-wrap gap-2">
-                                        {allTags.map(tag => (
+                                        {visibleTags.map(tag => (
                                             <button
                                                 key={tag}
                                                 onClick={() => toggleTag(tag)}
@@ -480,40 +502,21 @@ const ProductList = () => {
                                             </button>
                                         ))}
                                     </div>
+                                    {hasMoreTags && (
+                                        <button
+                                            onClick={() => setShowAllTags(prev => !prev)}
+                                            className="mt-3 text-sm font-medium text-red-500 hover:text-red-600"
+                                        >
+                                            {showAllTags ? 'Thu gọn' : 'Xem thêm'}
+                                        </button>
+                                    )}
                                 </div>
                             )}
-
-                            {/* Sort
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium mb-2">Sắp xếp theo</label>
-                                <div className="space-y-2">
-                                    <FormControl fullWidth size="small">
-                                        <Select
-                                            value={sortBy}
-                                            onChange={(e) => setSortBy(e.target.value)}
-                                        >
-                                            <MenuItem value="name">Tên sản phẩm</MenuItem>
-                                            <MenuItem value="price">Giá</MenuItem>
-                                            <MenuItem value="rating">Đánh giá</MenuItem>
-                                        </Select>
-                                    </FormControl>
-                                    <FormControl fullWidth size="small">
-                                        <Select
-                                            value={sortOrder}
-                                            onChange={(e) => setSortOrder(e.target.value)}
-                                        >
-                                            <MenuItem value="asc">Tăng dần</MenuItem>
-                                            <MenuItem value="desc">Giảm dần</MenuItem>
-                                        </Select>
-                                    </FormControl>
-                                </div>
-                            </div> */}
                         </div>
                     </div>
 
                     {/* Products Grid/List */}
                     <div className="lg:w-3/4">
-                        {/* Sort Bar - Only show for category pages (cho/meo) */}
                         {(category === 'cho' || category === 'meo') && (
                             <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
                                 <div className="flex items-center gap-2 flex-wrap">
@@ -521,11 +524,11 @@ const ProductList = () => {
                                     <div className="flex gap-2 flex-wrap">
                                         <button
                                             onClick={() => {
-                                                setSortBy('createdAt');
+                                                setSortBy('updatedAt');
                                                 setSortOrder('desc');
                                             }}
                                             className={`px-4 py-2 text-sm rounded transition-all ${
-                                                sortBy === 'createdAt' && sortOrder === 'desc'
+                                                sortBy === 'updatedAt' && sortOrder === 'desc'
                                                     ? 'bg-[#ff5252] text-white'
                                                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                             }`}

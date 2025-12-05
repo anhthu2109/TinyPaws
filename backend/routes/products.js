@@ -102,4 +102,24 @@ router.get('/:id', getProductById);
 // Admin routes
 router.post('/update-sales-count', auth, adminAuth, updateSalesCount);
 
+// GET /api/products/brands - Lấy danh sách thương hiệu
+router.get('/brands', async (req, res) => {
+    try {
+        const brands = await Product.distinct('brand', { brand: { $ne: null } });
+
+        res.json({
+            success: true,
+            data: {
+                brands: brands.sort()
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi khi lấy danh sách thương hiệu',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;

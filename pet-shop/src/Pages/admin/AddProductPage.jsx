@@ -4,19 +4,20 @@ import { FaArrowLeft, FaPlus } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import ProductForm from '../../components/admin/ProductForm';
 import adminApi from '../../api/adminApi';
-import { CONFIG } from '../../constants/config';
 
 const AddProductPage = () => {
     const navigate = useNavigate();
     const { token, isAdmin } = useAuth();
     const [loading, setLoading] = useState(false);
+    const [submitError, setSubmitError] = useState('');
 
     // Xử lý submit form
     const handleSubmit = async (formData) => {
         setLoading(true);
+        setSubmitError('');
         
         try {          
-            const response = await adminApi.post(`${CONFIG.API.BASE_URL}/products`, formData);
+            const response = await adminApi.post(`/products`, formData);
             if (response.data.success) {
                 // Hiển thị thông báo thành công
                 //alert('✅ Thêm sản phẩm thành công!');
@@ -27,8 +28,6 @@ const AddProductPage = () => {
                 throw new Error(response.data.message || 'Thêm sản phẩm thất bại');
             }
         } catch (error) {
-            console.error('❌ Error adding product:', error);
-            console.error('📋 Error details:', error.response?.data);
             
             let errorMessage = 'Có lỗi xảy ra khi thêm sản phẩm';
             
@@ -42,7 +41,7 @@ const AddProductPage = () => {
                 errorMessage = error.message;
             }
             
-            alert('❌ ' + errorMessage);
+            setSubmitError(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -88,6 +87,11 @@ const AddProductPage = () => {
 
             {/* Main Content */}
             <div className="max-w-7xl mx-auto px-6 py-4">
+                {submitError && (
+                    <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-6 py-4 text-red-700">
+                        {submitError}
+                    </div>
+                )}
                 <ProductForm
                     mode="add"
                     onSubmit={handleSubmit}

@@ -4,7 +4,6 @@ import { FaArrowLeft, FaEdit } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import ProductForm from '../../components/admin/ProductForm';
 import adminApi from '../../api/adminApi';
-import { CONFIG } from '../../constants/config';
 
 const EditProductPage = () => {
     const navigate = useNavigate();
@@ -15,6 +14,7 @@ const EditProductPage = () => {
     const [loading, setLoading] = useState(false);
     const [fetchLoading, setFetchLoading] = useState(true);
     const [error, setError] = useState('');
+    const [submitError, setSubmitError] = useState('');
 
     // Fetch product data
     useEffect(() => {
@@ -23,14 +23,13 @@ const EditProductPage = () => {
             
             setFetchLoading(true);
             try {
-                const response = await adminApi.get(`${CONFIG.API.BASE_URL}/products/${id}`);
+                const response = await adminApi.get(`/products/${id}`);
                 if (response.data.success) {
                     setProductData(response.data.data);
                 } else {
                     setError('Không thể tải dữ liệu sản phẩm');
                 }
             } catch (error) {
-                console.error('Error fetching product:', error);
                 setError('Không thể tải dữ liệu sản phẩm');
             } finally {
                 setFetchLoading(false);
@@ -43,9 +42,9 @@ const EditProductPage = () => {
     // Xử lý submit form
     const handleSubmit = async (formData) => {
         setLoading(true);
+        setSubmitError('');
         
         try {
-            console.log('Submitting product data:', formData);
             
             // Validate dữ liệu trước khi gửi
             if (!formData.name || !formData.category || !formData.price) {
@@ -57,10 +56,12 @@ const EditProductPage = () => {
                 return typeof img === 'string' ? img : img.url;
             });
 
+            const resolvedCategory = (formData.category && formData.category.trim()) || productData.category?._id || '';
+
             const submitData = {
                 name: formData.name,
                 description: formData.description,
-                category: productData.category?._id || formData.category,
+                category: resolvedCategory,
                 target: formData.target || 'ca-cho-va-meo',
                 brand: formData.brand || null,
                 price: parseInt(formData.price),
@@ -72,25 +73,15 @@ const EditProductPage = () => {
                 is_featured: formData.is_featured !== undefined ? formData.is_featured : false
             };
 
-            console.log('Processed submit data:', submitData);
-
-            const response = await adminApi.put(`${CONFIG.API.BASE_URL}/products/${id}`, submitData);
-            console.log('Update response:', response.data);
+            const response = await adminApi.put(`/products/${id}`, submitData);
 
             if (response.data.success) {
-                // Hiển thị thông báo thành công
-                //alert('✅ Cập nhật sản phẩm thành công!');
-                
                 // Chuyển về trang danh sách sản phẩm
                 navigate('/admin/products');
             } else {
                 throw new Error(response.data.message || 'Cập nhật thất bại');
             }
         } catch (error) {
-            console.error('Error updating product:', error);
-            console.error('Error details:', error.response?.data);
-            console.error('Error status:', error.response?.status);
-            
             let errorMessage = 'Có lỗi xảy ra khi cập nhật sản phẩm';
             
             if (error.response?.status === 400) {
@@ -104,8 +95,7 @@ const EditProductPage = () => {
             } else if (error.message) {
                 errorMessage = error.message;
             }
-            
-            alert('❌ ' + errorMessage);
+            setSubmitError(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -184,6 +174,11 @@ const EditProductPage = () => {
 
             {/* Main Content */}
             <div className="max-w-7xl mx-auto px-6 py-8">
+                {submitError && (
+                    <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-6 py-4 text-red-700">
+                        {submitError}
+                    </div>
+                )}
                 <ProductForm
                     mode="edit"
                     initialData={productData}

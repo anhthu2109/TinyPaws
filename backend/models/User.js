@@ -42,8 +42,8 @@ const userSchema = new mongoose.Schema({
     role: {
         type: String,
         enum: {
-            values: ['user', 'admin'],
-            message: 'Role phải là user hoặc admin'
+            values: ['user', 'admin', 'bot'],
+            message: 'Role phải là user, admin hoặc bot'
         },
         default: 'user',
         index: true
@@ -81,6 +81,10 @@ const userSchema = new mongoose.Schema({
         detail: { type: String, trim: true }
     },
     bio: {
+        type: String,
+        trim: true
+    },
+    avatar: {
         type: String,
         trim: true
     },

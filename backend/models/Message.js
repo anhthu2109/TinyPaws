@@ -53,6 +53,24 @@ const messageSchema = new mongoose.Schema({
     deleted_by_receiver: {
         type: Boolean,
         default: false
+    },
+    session_id: {
+        type: String,
+        index: true,
+        trim: true
+    },
+    is_bot: {
+        type: Boolean,
+        default: false
+    },
+    intent: {
+        type: String,
+        default: 'general',
+        trim: true
+    },
+    meta: {
+        type: Object,
+        default: {}
     }
 }, { 
     timestamps: true,

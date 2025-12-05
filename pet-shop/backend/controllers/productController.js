@@ -17,7 +17,7 @@ const getProducts = async (req, res) => {
 
         // Xây dựng query object
         let query = {};
-        
+
         // Filter theo category
         if (category && category !== 'all') {
             query.category = { $regex: category, $options: 'i' };
@@ -63,7 +63,7 @@ const getProducts = async (req, res) => {
 
         // Xây dựng sort object
         let sortObject = {};
-        
+
         if (sort) {
             switch (sort) {
                 case 'bestseller':
@@ -143,11 +143,7 @@ const getProducts = async (req, res) => {
 const getProductById = async (req, res) => {
     try {
         const { id } = req.params;
-        
-        console.log(`🔍 Fetching product with ID: ${id}`);
-        console.log(`📏 ID length: ${id.length}`);
-        console.log(`🔤 ID format: ${/^[0-9a-fA-F]{24}$/.test(id) ? 'Valid ObjectId' : 'Invalid ObjectId'}`);
-        
+
         // Check if ID is valid MongoDB ObjectId
         if (!id.match(/^[0-9a-fA-F]{24}$/)) {
             return res.status(400).json({
@@ -155,15 +151,12 @@ const getProductById = async (req, res) => {
                 message: 'ID sản phẩm không hợp lệ'
             });
         }
-        
+
         const product = await Product.findById(id);
-        console.log(`📦 Product found:`, product ? 'YES' : 'NO');
-        
+
         if (!product) {
             // Log all products to see what IDs exist
-            const allProducts = await Product.find({}, '_id name').limit(5);
-            console.log(`📋 Sample product IDs in database:`, allProducts.map(p => ({ id: p._id, name: p.name })));
-            
+
             return res.status(404).json({
                 success: false,
                 message: 'Không tìm thấy sản phẩm'
@@ -178,7 +171,6 @@ const getProductById = async (req, res) => {
             });
         }
 
-        console.log(`✅ Product found: ${product.name}`);
 
         res.status(200).json({
             success: true,
@@ -207,10 +199,10 @@ const getFeaturedProducts = async (req, res) => {
                 { salesCount: { $gte: 100 } }
             ]
         })
-        .sort({ rating: -1, salesCount: -1 })
-        .limit(parseInt(limit))
-        .populate('category', 'name')
-        .lean();
+            .sort({ rating: -1, salesCount: -1 })
+            .limit(parseInt(limit))
+            .populate('category', 'name')
+            .lean();
 
         res.status(200).json({
             success: true,
@@ -261,10 +253,10 @@ const getDealProducts = async (req, res) => {
         const products = await Product.find({
             discount: { $gt: 0 }
         })
-        .sort({ discount: -1, createdAt: -1 })
-        .limit(parseInt(limit))
-        .populate('category', 'name')
-        .lean();
+            .sort({ discount: -1, createdAt: -1 })
+            .limit(parseInt(limit))
+            .populate('category', 'name')
+            .lean();
 
         res.status(200).json({
             success: true,
@@ -285,7 +277,7 @@ const getDealProducts = async (req, res) => {
 const getCategories = async (req, res) => {
     try {
         const categories = await Product.distinct('category');
-        
+
         res.status(200).json({
             success: true,
             data: categories
@@ -305,7 +297,7 @@ const getCategories = async (req, res) => {
 const getBrands = async (req, res) => {
     try {
         const brands = await Product.distinct('brand');
-        
+
         res.status(200).json({
             success: true,
             data: brands

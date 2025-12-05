@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 import { 
     FaUsers, 
     FaBox, 
@@ -44,11 +45,16 @@ const Dashboard = () => {
         try {
             setLoading(true);
             
+            const token = localStorage.getItem('token');
+
             // Fetch all dashboard data in parallel
             const [statsRes, ordersRes, revenueRes] = await Promise.all([
-                adminApi.get(`${CONFIG.API.BASE_URL}/dashboard/stats`),
-                adminApi.get(`${CONFIG.API.BASE_URL}/orders/admin/all?limit=5&sort=-createdAt`),
-                adminApi.get(`${CONFIG.API.BASE_URL}/dashboard/revenue-chart`)
+                adminApi.get('/dashboard/stats'),
+                axios.get(`${CONFIG.API.BASE_URL}/api/orders`, {
+                    params: { limit: 5, page: 1 },
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                }),
+                adminApi.get('/dashboard/revenue-chart')
             ]);
 
             if (statsRes.data.success) {
@@ -189,14 +195,6 @@ const Dashboard = () => {
                         Tổng quan về hoạt động kinh doanh của TinyPaws
                     </p>
                 </div>
-                <div className="flex space-x-3">
-                    <button className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                        Xuất báo cáo
-                    </button>
-                    <button className="px-4 py-2 bg-[#ff5252] text-white rounded-lg hover:bg-[#e53e3e] transition-colors">
-                        Thêm sản phẩm
-                    </button>
-                </div>
             </div>
 
             {/* Loading State */}
@@ -207,45 +205,12 @@ const Dashboard = () => {
                 </div>
             ) : (
                 <>
-                    {/* Stats Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {statsCards.map((stat, index) => {
-                            const IconComponent = stat.icon;
-                            return (
-                                <div key={index} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="text-sm text-gray-600 mb-1">{stat.title}</p>
-                                            <p className="text-3xl font-bold text-gray-800">{stat.value}</p>
-                                            <div className="flex items-center mt-2">
-                                                {stat.changeType === 'increase' ? (
-                                                    <FaArrowUp className="text-green-500 text-sm mr-1" />
-                                                ) : (
-                                                    <FaArrowDown className="text-red-500 text-sm mr-1" />
-                                                )}
-                                                <span className={`text-sm font-medium ${
-                                                    stat.changeType === 'increase' ? 'text-green-500' : 'text-red-500'
-                                                }`}>
-                                                    {stat.change}
-                                                </span>
-                                                <span className="text-gray-500 text-sm ml-1">so với tháng trước</span>
-                                            </div>
-                                        </div>
-                                        <div className={`w-12 h-12 ${stat.color} rounded-lg flex items-center justify-center`}>
-                                            <IconComponent className="text-white text-xl" />
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-
                     {/* Charts Row */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* Revenue Chart */}
                         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-semibold text-gray-800">Doanh thu 7 ngày qua</h3>
+                                <h3 className="text-lg font-semibold text-gray-800">Doanh thu 30 ngày gần nhất</h3>
                                 <FaChartLine className="text-[#ff5252]" />
                             </div>
                             <ResponsiveContainer width="100%" height={300}>
@@ -268,7 +233,7 @@ const Dashboard = () => {
                         {/* Orders Chart */}
                         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-semibold text-gray-800">Đơn hàng 7 ngày qua</h3>
+                                <h3 className="text-lg font-semibold text-gray-800">Đơn hàng 30 ngày gần nhất</h3>
                                 <FaShoppingCart className="text-blue-500" />
                             </div>
                             <ResponsiveContainer width="100%" height={300}>
@@ -284,61 +249,65 @@ const Dashboard = () => {
                     </div>
 
                     {/* Bottom Row */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-stretch">
                         {/* Category Distribution */}
-                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-4">Phân bố danh mục</h3>
-                            <ResponsiveContainer width="100%" height={250}>
-                                <PieChart>
-                                    <Pie
-                                        data={chartData.categories}
-                                        cx="50%"
-                                        cy="50%"
-                                        outerRadius={80}
-                                        dataKey="value"
-                                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                    >
-                                        {chartData.categories.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.color} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip />
-                                </PieChart>
-                            </ResponsiveContainer>
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:col-span-2">
+                            <h3 className="text-sm sm:text-base font-semibold text-gray-800 mb-2">Phân bố danh mục</h3>                      
+                            <div className="flex-1">
+                                <ResponsiveContainer width="100%" height={280}>
+                                    <PieChart>
+                                        <Pie
+                                            data={chartData.categories}
+                                            cx="50%"
+                                            cy="50%"
+                                            outerRadius={90}
+                                            dataKey="value"
+                                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                            labelStyle={{ fontSize: 12 }}
+                                        >
+                                            {chartData.categories.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
 
                         {/* Recent Orders */}
-                        <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-semibold text-gray-800">Đơn hàng gần đây</h3>
-                                <a href="/admin/orders" className="text-[#ff5252] hover:underline text-sm">
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 lg:col-span-3">
+                            <div className="flex items-center justify-between mb-2">
+                                <h3 className="text-sm sm:text-base font-semibold text-gray-800">Đơn hàng gần đây</h3>
+                                <a href="/admin/orders" className="text-[#ff5252] hover:underline text-xs">
                                     Xem tất cả
                                 </a>
                             </div>
-                            <div className="overflow-x-auto">
+
+                            <div className="overflow-x-auto flex-1">
                                 <table className="w-full">
                                     <thead>
                                         <tr className="border-b border-gray-200">
-                                            <th className="text-left py-2 text-sm font-medium text-gray-600">Mã đơn</th>
-                                            <th className="text-left py-2 text-sm font-medium text-gray-600">Khách hàng</th>
-                                            <th className="text-left py-2 text-sm font-medium text-gray-600">Số tiền</th>
-                                            <th className="text-left py-2 text-sm font-medium text-gray-600">Trạng thái</th>
+                                            <th className="text-left py-1.5 text-xs font-medium text-gray-600">Mã đơn</th>
+                                            <th className="text-left py-1.5 text-xs font-medium text-gray-600">Khách hàng</th>
+                                            <th className="text-left py-1.5 text-xs font-medium text-gray-600">Số tiền</th>
+                                            <th className="text-left py-1.5 text-xs font-medium text-gray-600">Trạng thái</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {recentOrders.map((order, index) => (
                                             <tr key={order._id || index} className="border-b border-gray-100">
-                                                <td className="py-3 text-sm font-medium text-gray-800">
+                                                <td className="py-1.5 text-xs font-medium text-gray-800">
                                                     {order.order_number}
                                                 </td>
-                                                <td className="py-3 text-sm text-gray-600">
+                                                <td className="py-1.5 text-xs text-gray-600">
                                                     {order.user?.full_name}
                                                 </td>
-                                                <td className="py-3 text-sm text-gray-800 font-medium">
+                                                <td className="py-1.5 text-xs text-gray-800 font-medium">
                                                     {formatPrice(order.final_total)}
                                                 </td>
-                                                <td className="py-3">
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                <td className="py-1.5">
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
                                                         order.status === 'delivered' ? 'bg-green-100 text-green-800' :
                                                         order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
                                                         order.status === 'confirmed' ? 'bg-yellow-100 text-yellow-800' :
@@ -353,46 +322,8 @@ const Dashboard = () => {
                                 </table>
                             </div>
                         </div>
-                    </div>
-
-                    {/* Quick Actions */}
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Thao tác nhanh</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <a 
-                                href="/admin/products/add" 
-                                className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                            >
-                                <FaBox className="text-green-500 mr-3 text-xl" />
-                                <div>
-                                    <p className="font-medium text-gray-800">Thêm sản phẩm mới</p>
-                                    <p className="text-sm text-gray-600">Tạo sản phẩm mới cho cửa hàng</p>
-                                </div>
-                            </a>
-                            
-                            <a 
-                                href="/admin/orders" 
-                                className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                            >
-                                <FaShoppingCart className="text-orange-500 mr-3 text-xl" />
-                                <div>
-                                    <p className="font-medium text-gray-800">Xem đơn hàng</p>
-                                    <p className="text-sm text-gray-600">Quản lý và xử lý đơn hàng</p>
-                                </div>
-                            </a>
-                            
-                            <a 
-                                href="/admin/users" 
-                                className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                            >
-                                <FaUsers className="text-purple-500 mr-3 text-xl" />
-                                <div>
-                                    <p className="font-medium text-gray-800">Quản lý người dùng</p>
-                                    <p className="text-sm text-gray-600">Xem và quản lý tài khoản</p>
-                                </div>
-                            </a>
-                        </div>
-                    </div>
+                </div>
+                  
                 </>
             )}
         </div>

@@ -153,7 +153,7 @@ const HeaderDesktop = () => {
                         </div>
 
                         <div className="col1 w-[50%] flex justify-end">
-                            <p className="text-[12px] font-[450]">💕Hotline: 1800-1234💕</p>
+                            <p className="text-[12px] font-[450]">💕Hotline: 0765234567💕</p>
                         </div>
                     </div>
                 </div>

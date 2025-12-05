@@ -18,24 +18,46 @@ export const WishlistProvider = ({ children }) => {
 
     // Get localStorage key based on user
     const getStorageKey = () => {
-        return user ? `tinypaws_wishlist_${user.id}` : 'tinypaws_wishlist_guest';
+        const userId = user?._id || user?.id;
+        return userId ? `tinypaws_wishlist_${userId}` : 'tinypaws_wishlist_guest';
     };
 
-    // Load wishlist from localStorage when user changes
+    // Load wishlist (backend for logged-in, local for guest)
     useEffect(() => {
-        const storageKey = getStorageKey();
-        const savedWishlist = localStorage.getItem(storageKey);
-        if (savedWishlist) {
+        const loadWishlist = async () => {
+            const storageKey = getStorageKey();
+
+            if (!user?._id) {
+                const savedWishlist = localStorage.getItem(storageKey);
+                if (savedWishlist) {
+                    try {
+                        setWishlistItems(JSON.parse(savedWishlist));
+                        return;
+                    } catch (error) {
+                        localStorage.removeItem(storageKey);
+                    }
+                }
+                setWishlistItems([]);
+                return;
+            }
+
             try {
-                setWishlistItems(JSON.parse(savedWishlist));
+                const response = await publicApi.get(`/api/recommendations/wishlist/${user._id}`);
+                if (response.data.success) {
+                    const items = (response.data.data?.items || []).map(item => item.product || item);
+                    setWishlistItems(items);
+                    localStorage.setItem(storageKey, JSON.stringify(items));
+                } else {
+                    setWishlistItems([]);
+                }
             } catch (error) {
-                localStorage.removeItem(storageKey);
+                console.warn('Failed to load wishlist from server:', error);
                 setWishlistItems([]);
             }
-        } else {
-            setWishlistItems([]);
-        }
-    }, [user]); // Reload when user changes
+        };
+
+        loadWishlist();
+    }, [user?._id]); // Reload when user changes
 
     // Save wishlist to localStorage whenever it changes
     useEffect(() => {

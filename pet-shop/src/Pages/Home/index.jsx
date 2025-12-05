@@ -26,11 +26,20 @@ const Home = () => {
             }
 
             try {
+                console.log('Fetching recommendations for user:', user._id);
                 const response = await axios.get(`${CONFIG.API.BASE_URL}/api/recommendations/${user._id}?limit=8`);
+                console.log('Recommendations API response:', response.data);
                 
-                if (response.data.success && response.data.data.products && response.data.data.products.length > 0) {
+                const products = response.data?.data?.products || [];
+                const isPersonalized = response.data?.fallback === false && products.length > 0;
+                
+                console.log('Products count:', products.length);
+                console.log('Is personalized:', isPersonalized);
+                console.log('Fallback value:', response.data?.fallback);
+
+                if (response.data.success && isPersonalized) {
                     // Transform recommendations to match component format
-                    const transformedRecommendations = response.data.data.products.map(product => ({
+                    const transformedRecommendations = products.map(product => ({
                         id: product._id,
                         name: product.name,
                         category: product.category?.name || 'Chưa phân loại',
@@ -41,14 +50,23 @@ const Home = () => {
                         rating: product.rating || 4.5,
                         reviews: Math.floor(Math.random() * 200) + 10,
                         stock: product.stock_quantity,
-                        isNew: new Date(product.createdAt) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-                    }));
+                        isNew: new Date(product.createdAt) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+                        updatedAt: product.updatedAt || product.createdAt
+                    }))
+                    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)); // Sort by updatedAt
                     
                     setRecommendedProducts(transformedRecommendations);
                     setShowRecommendations(true);
+                } else {
+                    console.log('Not showing recommendations - success:', response.data.success, 'isPersonalized:', isPersonalized);
+                    setRecommendedProducts([]);
+                    setShowRecommendations(false);
                 }
             } catch (error) {
+                console.error('Recommendations API error:', error);
+                console.error('Error response:', error.response?.data);
                 // Nếu API fail hoặc chưa có dữ liệu, không hiển thị recommendations
+                setRecommendedProducts([]);
                 setShowRecommendations(false);
             }
         };
@@ -62,14 +80,14 @@ const Home = () => {
             try {
                 setLoading(true);
                 
-                // Fetch featured products (is_featured = true)
-                const featuredResponse = await axios.get(`${CONFIG.API.BASE_URL}/api/products/featured?limit=8`);
+                // Fetch featured products (is_featured = true, sorted by updatedAt)
+                const featuredResponse = await axios.get(`${CONFIG.API.BASE_URL}/api/products/featured?limit=8&sort=updatedAt&sortOrder=desc`);
                 
-                // Fetch bestsellers (sorted by sales_count)
-                const bestsellersResponse = await axios.get(`${CONFIG.API.BASE_URL}/api/products?sort=bestseller&limit=8`);
+                // Fetch bestsellers (sorted by sales_count, then updatedAt)
+                const bestsellersResponse = await axios.get(`${CONFIG.API.BASE_URL}/api/products?sort=bestseller&limit=20&sortBy=updatedAt&sortOrder=desc`);
                 
-                // Fetch new products (created in last 30 days)
-                const newProductsResponse = await axios.get(`${CONFIG.API.BASE_URL}/api/products?limit=20&sort=createdAt`);
+                // Fetch new products (sorted by updatedAt)
+                const newProductsResponse = await axios.get(`${CONFIG.API.BASE_URL}/api/products?limit=40&sort=updatedAt&sortOrder=desc`);
 
                 // Set featured products from API
                 if (featuredResponse.data.success && featuredResponse.data.data.products) {
@@ -85,8 +103,10 @@ const Home = () => {
                         reviews: Math.floor(Math.random() * 200) + 10,
                         stock: product.stock_quantity,
                         salesCount: product.sales_count || 0,
-                        isNew: new Date(product.createdAt) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-                    }));
+                        isNew: new Date(product.createdAt) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+                        updatedAt: product.updatedAt || product.createdAt
+                    }))
+                    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)); // Sort by updatedAt
                     setFeaturedProducts(featured);
                 }
                 
@@ -104,8 +124,10 @@ const Home = () => {
                         reviews: Math.floor(Math.random() * 200) + 10,
                         stock: product.stock_quantity,
                         salesCount: product.sales_count || 0,
-                        isNew: new Date(product.createdAt) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-                    }));
+                        isNew: new Date(product.createdAt) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+                        updatedAt: product.updatedAt || product.createdAt
+                    }))
+                    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)); // Sort by updatedAt
                     
                     // Debug: Log bestsellers with sales_count
                     console.log('🔥 Bestsellers from API:', bestsellers.map(p => ({
@@ -113,14 +135,12 @@ const Home = () => {
                         salesCount: p.salesCount
                     })));
                     
-                    setBestsellerProducts(bestsellers.slice(0, 6));
+                    setBestsellerProducts(bestsellers);
                 }
                 
-                // Set new products (filter products created in last 30 days)
+                // Set new products (sorted by updatedAt, newest first)
                 if (newProductsResponse.data.success && newProductsResponse.data.data.products) {
-                    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
                     const newProds = newProductsResponse.data.data.products
-                        .filter(product => new Date(product.createdAt) > thirtyDaysAgo)
                         .map(product => ({
                             id: product._id,
                             name: product.name,
@@ -133,9 +153,11 @@ const Home = () => {
                             reviews: Math.floor(Math.random() * 200) + 10,
                             stock: product.stock_quantity,
                             salesCount: product.sales_count || 0,
-                            isNew: true
-                        }));
-                    setNewProducts(newProds.slice(0, 8));
+                            isNew: new Date(product.createdAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+                            updatedAt: product.updatedAt || product.createdAt
+                        }))
+                        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)); // Sort by updatedAt
+                    setNewProducts(newProds);
                 }
             } catch (error) {
                 setFeaturedProducts(mockFeaturedProducts);
@@ -393,7 +415,7 @@ const Home = () => {
         }
     ];
 
-    const mockBestsellerProducts = featuredProducts.slice(0, 6); // Use first 6 as bestsellers
+    const mockBestsellerProducts = featuredProducts.slice(0, 6);
 
     if (loading) {
         return (
@@ -410,19 +432,17 @@ const Home = () => {
         <>
             <HomeSlider />
             <Features />
-            
-            {/* Hiển thị "Gợi ý dành cho bạn" nếu user đã login và có recommendations */}
+
             {showRecommendations && (
                 <ProductRow 
                     title="Gợi ý dành cho bạn" 
                     products={recommendedProducts}
                     icon={<FaLightbulb />}
                     category="recommendations"
-                    linkTo="/products"
+                    showViewAll={false}
                 />
             )}
-            
-            {/* Luôn hiển thị "Sản phẩm nổi bật" */}
+
             {featuredProducts.length > 0 && (
                 <ProductRow 
                     title="Sản phẩm nổi bật" 
@@ -434,8 +454,7 @@ const Home = () => {
             )}
             
             <BannerPromo />
-            
-            {/* Bán chạy nhất */}
+
             {bestsellerProducts.length > 0 && (
                 <ProductRow 
                     title="Bán chạy nhất" 
@@ -446,7 +465,6 @@ const Home = () => {
                 />
             )}
             
-            {/* Sản phẩm mới */}
             {newProducts.length > 0 && (
                 <ProductRow 
                     title="Sản phẩm mới" 

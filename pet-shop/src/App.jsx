@@ -40,7 +40,6 @@ import EditProductPage from './Pages/admin/EditProductPage';
 import Orders from './Pages/admin/Orders';
 import Users from './Pages/admin/Users';
 import Categories from './Pages/admin/Categories';
-import Content from './Pages/admin/Content';
 import Chat from './Pages/admin/Chat';
 import Profile from './Pages/admin/Profile';
 
@@ -133,7 +132,6 @@ function App() {
                   <Route path="blogs" element={<BlogManagement />} />
                   <Route path="blogs/new" element={<AddBlog />} />
                   <Route path="blogs/edit/:id" element={<EditBlog />} />
-                  <Route path="content" element={<Content />} />
                   <Route path="chat" element={<Chat />} />
                   <Route path="profile" element={<Profile />} />
                   <Route index element={<Navigate to="/admin/dashboard" replace />} />

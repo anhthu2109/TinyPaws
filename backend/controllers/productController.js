@@ -58,7 +58,7 @@ const getProducts = async (req, res) => {
                     query.discount = { $gt: 0 };
                     break;
                 case 'featured':
-                    query.rating = { $gte: 4.5 };
+                    query.is_featured = true;
                     break;
                 case 'new_arrivals':
                     query.isNew = true;
@@ -104,7 +104,7 @@ const getProducts = async (req, res) => {
                 sortObject = { createdAt: -1 };
                 break;
             default:
-                sortObject = { createdAt: -1 };
+                sortObject = { updatedAt: -1, createdAt: -1 };
         }
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -279,7 +279,8 @@ const getAdminProducts = async (req, res) => {
 // 🧩 Lấy chi tiết sản phẩm cho admin
 const getAdminProductById = async (req, res) => {
     try {
-        const product = await Product.findById(req.params.id);
+        const product = await Product.findById(req.params.id)
+            .populate('category', 'name type subcategories');
         if (!product) return res.status(404).json({ success: false, message: 'Không tìm thấy sản phẩm' });
         res.status(200).json({ success: true, data: product });
     } catch (error) {
