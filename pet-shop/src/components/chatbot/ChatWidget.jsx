@@ -39,11 +39,7 @@ const ChatWidget = () => {
   const MESSAGE_SEND_URL = `${API_BASE_URL}/api/messages`;
   const CLEAR_HISTORY_URL = `${API_BASE_URL}/api/chat/clear-history`;
 
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
+  
   // Khi mở popup chat: nếu đã đăng nhập và chưa load lịch sử thì gọi API history
   useEffect(() => {
     if (isOpen && isAuthenticated && !initialLoaded) {
@@ -549,10 +545,10 @@ const ChatWidget = () => {
               <div key={msg.messageId || idx}>
                 <div
                   className={`chatbot-message ${msg.sender === "user"
-                      ? "chatbot-message-user"
-                      : msg.sender === "admin" || msg.sender === "system"
-                        ? "chatbot-message-admin"
-                        : "chatbot-message-bot"
+                    ? "chatbot-message-user"
+                    : msg.sender === "admin" || msg.sender === "system"
+                      ? "chatbot-message-admin"
+                      : "chatbot-message-bot"
                     }`}
                 >
                   {/* Avatar nhỏ cho Admin (Optional) */}

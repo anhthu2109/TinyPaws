@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 const Chat = () => {
     const [conversations, setConversations] = useState([]);
     const [selectedUserId, setSelectedUserId] = useState(null);
+    const [userHasSelected, setUserHasSelected] = useState(false);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
@@ -17,19 +18,6 @@ const Chat = () => {
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
     const { token } = useAuth();
-
-    const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
-
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
-
-    useEffect(() => {
-        if (shouldScrollToBottom && messages.length > 0) {
-            scrollToBottom();
-            setShouldScrollToBottom(false);
-        }
-    }, [messages, shouldScrollToBottom]);
 
     useEffect(() => {
         fetchConversations();
@@ -46,7 +34,6 @@ const Chat = () => {
         let intervalId = null;
 
         if (selectedUserId) {
-            setShouldScrollToBottom(true);
             fetchMessages(selectedUserId);
 
             intervalId = setInterval(() => {
@@ -78,7 +65,8 @@ const Chat = () => {
 
                 setConversations(mappedConversations);
 
-                if (mappedConversations.length > 0 && !selectedUserId) {
+                // Chỉ tự động chọn khi user chưa từng tự chọn cuộc trò chuyện nào
+                if (mappedConversations.length > 0 && !selectedUserId && !userHasSelected) {
                     setSelectedUserId(mappedConversations[0]._id);
                 }
             }
@@ -100,10 +88,6 @@ const Chat = () => {
                 let incomingMessages = response.data.data.messages;
 
                 incomingMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-
-                if (incomingMessages.length > messages.length) {
-                     setShouldScrollToBottom(true);
-                }
                 
                 setMessages(incomingMessages);
                 await markAsRead(userId);
@@ -160,7 +144,6 @@ const Chat = () => {
 
             if (response.data.success) {
                 setNewMessage('');
-                setShouldScrollToBottom(true);
                 fetchMessages(selectedUserId);
                 fetchConversations();
             }
@@ -330,7 +313,10 @@ const Chat = () => {
                                 filteredConversations.map((conversation) => (
                                     <div
                                         key={conversation._id}
-                                        onClick={() => setSelectedUserId(conversation._id)}
+                                        onClick={() => {
+                                            setSelectedUserId(conversation._id);
+                                            setUserHasSelected(true);
+                                        }}
                                         className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${selectedUserId === conversation._id
                                             ? 'bg-blue-50 border-l-4 border-l-[#ff5252]'
                                             : ''

@@ -8,13 +8,13 @@ import google.generativeai as genai
 import unicodedata
 
 # === SỬA LỖI ĐƯỜNG DẪN ===
-# Lấy đường dẫn tuyệt đối của thư mục chứa file chat_rag.py này
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Định nghĩa đường dẫn cache dựa trên BASE_DIR
 INDEX_PATH = os.path.join(BASE_DIR, "faiss_index.bin")
 DATA_PATH = os.path.join(BASE_DIR, "qa_cache.parquet")
 # ========================
+
+# 🔥 EXPORT để main.py import được
+__all__ = ['PetChatRAG', 'INDEX_PATH', 'DATA_PATH']
 
 class PetChatRAG:
     def __init__(self, api_key, data_file):
@@ -25,7 +25,7 @@ class PetChatRAG:
         self.index = None
         self.llm_model = None
         self.embedding_dimension = None
-        self.similarity_threshold = 0.55
+        self.similarity_threshold = 0.35  # Giảm từ 0.55 xuống 0.35
 
         genai.configure(api_key=self.api_key)
         self.llm_model = genai.GenerativeModel("models/gemini-2.0-flash")
@@ -34,20 +34,25 @@ class PetChatRAG:
     def load_data(self):
         try:
             self.df = pd.read_excel(self.data_file)
-            print(f"Data loaded from {self.data_file} ({len(self.df)} records)")
+            
+            # 🔥 THÊM: Test với 100 câu đầu tiên (xóa sau khi test xong)
+            # self.df = self.df.head(100)  # Uncomment dòng này để test nhanh
+            
+            print(f"✅ Data loaded from {self.data_file} ({len(self.df)} records)")
 
-            self.df["question"] = (
-                self.df["question"]
-                .astype(str)
-                .str.lower()
-                .apply(lambda x: unicodedata.normalize("NFKD", x))
-                .str.encode("ascii", errors="ignore")
-                .str.decode("utf-8")
-            )
+            # 🔥 FIX: Không normalize tiếng Việt (gây mất dấu)
+            self.df["question"] = self.df["question"].astype(str).str.lower()
+            self.df["answers"] = self.df["answers"].astype(str)
+            
+            # Debug: In ra 3 câu đầu
+            print("\n📋 Sample data:")
+            for idx in range(min(3, len(self.df))):
+                print(f"  Q{idx+1}: {self.df.iloc[idx]['question'][:60]}...")
+                print(f"  A{idx+1}: {self.df.iloc[idx]['answers'][:60]}...")
 
             return True
         except Exception as e:
-            print(f"Error loading data: {e}")
+            print(f"❌ Error loading data: {e}")
             return False
 
     # === Embedding ===
@@ -124,22 +129,68 @@ class PetChatRAG:
         self.save_cache()
         print("Chatbot ready with new embeddings!")
 
-    # === Retrieval ===
+    # === Retrieval (FIX: Thêm Keyword Matching) ===
     def find_relevant_products(self, query, k=3):
         query_emb = self.get_embedding(query)
-        if query_emb is None:
+        vector_results = pd.DataFrame()
+        
+        if query_emb is not None and self.index is not None:
+            q_vec = np.array([query_emb], dtype="float32")
+            faiss.normalize_L2(q_vec)
+            D, I = self.index.search(q_vec, k)
+            vector_results = self.df.iloc[I[0]].copy()
+            vector_results["score"] = D[0]
+        
+        # 🔥 THÊM: Keyword Matching để tìm chính xác hơn
+        query_lower = query.lower()
+        important_keywords = [
+            "rụng lông", "rụng", "chăm sóc", "dinh dưỡng", "vaccine", "tắm", 
+            "chó con", "mèo con", "kitten", "puppy", "con",
+            "triệt sản", "bầu", "sỏi thận", "tiết niệu", "ve rận", "bọ chét"
+        ]
+        
+        keyword_results = pd.DataFrame()
+        matched_indices = set()
+        
+        for kw in important_keywords:
+            if kw in query_lower:
+                matches = self.df[
+                    self.df["question"].str.contains(kw, case=False, na=False, regex=False) |
+                    self.df["answers"].str.contains(kw, case=False, na=False, regex=False)
+                ]
+                if not matches.empty:
+                    matched_indices.update(matches.index.tolist())
+                    print(f"🔍 Keyword '{kw}': Tìm thấy {len(matches)} câu hỏi")
+        
+        if matched_indices:
+            keyword_results = self.df.loc[list(matched_indices)].copy()
+            keyword_results["score"] = 0.85
+            print(f"✅ Tổng {len(keyword_results)} kết quả từ keyword matching")
+        
+        # Gộp kết quả
+        if not keyword_results.empty and not vector_results.empty:
+            final_results = pd.concat([keyword_results, vector_results])
+        elif not keyword_results.empty:
+            final_results = keyword_results
+        elif not vector_results.empty:
+            final_results = vector_results
+        else:
             return pd.DataFrame(), []
-
-        q_vec = np.array([query_emb], dtype="float32")
-        faiss.normalize_L2(q_vec)
-        D, I = self.index.search(q_vec, k)
-        return self.df.iloc[I[0]], D[0]
+        
+        final_results = final_results.drop_duplicates(subset=["question"])
+        final_results = final_results.nlargest(k, "score")
+        
+        return final_results, final_results["score"].tolist()
 
     # === Generation ===
     def generate_answer(self, query, relevant_data, animal_type=None):
-        context = "\n".join(relevant_data["answers"].tolist())
+        # Lấy tối đa 5 câu để context không quá dài
+        context_items = []
+        for idx, row in relevant_data.head(5).iterrows():
+            context_items.append(f"- Câu hỏi: {row['question']}\n  Trả lời: {row['answers']}")
         
-        # --- LOGIC FILTER ĐỘNG VẬT ---
+        context = "\n\n".join(context_items)
+        
         animal_instruction = ""
         if animal_type:
             animal_instruction = f"""
@@ -170,7 +221,7 @@ class PetChatRAG:
         """
         return self.llm_generate_with_retry(prompt)
 
-    # === Chat (Đã sửa để nhận diện Chào hỏi xã giao) ===
+    # === Chat (FIX: Thêm fallback thông minh) ===
     def chat(self, query, history=None, k=8):
         start = time.time()
         query_lower = query.lower()
@@ -229,60 +280,35 @@ class PetChatRAG:
             if "mèo" not in context_query and "meo" not in context_query:
                 animal_type = "Chó"
 
-        # --- 4. TÌM KIẾM VÀ LỌC SẢN PHẨM (RAG) ---
+        # --- 4. TÌM KIẾM ---
         relevant, scores = self.find_relevant_products(context_query, k)
         max_score = float(max(scores)) if len(scores) else 0.0
         
-        GREETING_KEYWORDS = ["hi", "hello", "chào", "alo", "ơi", "bot", "shop", "ad", "admin", "hỗ trợ"]
-        is_greeting = any(kw in query_lower for kw in GREETING_KEYWORDS)
+        print(f"🔎 Tìm được {len(relevant)} kết quả | Score cao nhất: {max_score:.2f}")
 
-        if not relevant.empty:
-            # A. BỘ LỌC DANH MỤC CỨNG (Hard Category Filter)
-            # Fix lỗi hỏi Đồ chơi ra Bánh thưởng
-            category_rules = {
-                "đồ chơi": ["Đồ chơi", "Phụ kiện", "Dụng cụ"],
-                "nhà cây": ["Đồ chơi", "Phụ kiện", "Chuồng"],
-                "cat tree": ["Đồ chơi", "Phụ kiện", "Chuồng"],
-                "thức ăn": ["Thức ăn", "Hạt", "Pate", "Bánh thưởng", "Súp"],
-                "hạt": ["Thức ăn", "Hạt"],
-                "pate": ["Thức ăn", "Pate"],
-                "bánh thưởng": ["Thức ăn", "Bánh thưởng"],
-                "thuốc": ["Thuốc", "Y tế", "Chăm sóc sức khỏe", "Dinh dưỡng"],
-                "trị ve": ["Thuốc", "Y tế", "Chăm sóc sức khỏe", "Vệ sinh"],
-                "sữa tắm": ["Vệ sinh", "Mỹ phẩm"],
-                "cát": ["Vệ sinh", "Cát vệ sinh"]
+        # --- 5. KIỂM TRA KẾT QUẢ (FIX: Thêm fallback thông minh) ---
+        if relevant.empty or max_score < self.similarity_threshold:
+            # 🔥 FALLBACK THÔNG MINH
+            fallback_topics = {
+                "rụng lông": "Chó rụng lông có thể do thiếu dinh dưỡng, ký sinh trùng hoặc stress. Bạn nên:\n- Bổ sung Omega-3/6 (dầu cá)\n- Tắm đúng cách 2-4 tuần/lần\n- Đưa bé đi khám bác sĩ nếu rụng nhiều bất thường",
+                
+                "chăm sóc chó con": "Chăm sóc chó con cần:\n- Thức ăn chuyên dụng cho Puppy\n- Tiêm phòng đầy đủ (6-8 tuần tuổi)\n- Tắm sau khi tiêm vaccine 1 tuần\n- Huấn luyện từ nhỏ",
+                
+                "chăm sóc mèo con": "Chăm sóc mèo con cần:\n- Thức ăn cho Kitten (protein cao)\n- Tiêm phòng 3 mũi (8-16 tuần)\n- Vệ sinh khay cát hàng ngày\n- Chơi đùa để phát triển",
             }
             
-            detected_categories = []
-            for keyword, valid_cats in category_rules.items():
-                if keyword in query_lower:
-                    detected_categories.extend(valid_cats)
+            for topic, answer in fallback_topics.items():
+                if topic in query_lower:
+                    return {
+                        "response": f"{answer}\n\n💡 Bạn có thể hỏi thêm hoặc **chat với nhân viên** để được tư vấn chi tiết hơn nhé!",
+                        "sources": [],
+                        "fallback": True,
+                        "processing_time": round(time.time() - start, 2),
+                        "max_similarity": max_score
+                    }
             
-            if detected_categories:
-                # Hàm kiểm tra xem sản phẩm có thuộc danh mục cho phép không
-                def check_category_match(row):
-                    full_txt = str(row.get('full_text', '')).lower()
-                    cat_col = str(row.get('category', '')).lower()
-                    # Kiểm tra trong cột Category hoặc trong Full Text có chứa từ khóa loại
-                    return any(t.lower() in cat_col or f"loại: {t.lower()}" in full_txt for t in detected_categories)
-
-                filtered_relevant = relevant[relevant.apply(check_category_match, axis=1)]
-                
-                # Chỉ áp dụng lọc nếu lọc xong vẫn còn sản phẩm (tránh lọc nhầm hết sạch)
-                # Hoặc nếu ý định quá rõ ràng (như "thuốc") mà shop không có thì chấp nhận rỗng
-                if not filtered_relevant.empty or "thuốc" in query_lower or "trị ve" in query_lower:
-                    relevant = filtered_relevant
-                    if relevant.empty:
-                         print(f"Đã lọc theo danh mục {detected_categories} nhưng không có SP nào.")
-
-        if not relevant.empty:
-            # B. BỘ LỌC THƯƠNG HIỆU - XÓA ĐI
-            # (Chỉ giữ lại logic lọc danh mục nếu cần)
-            pass
-
-        # --- 5. KIỂM TRA KẾT QUẢ ---
-        if relevant.empty or max_score < self.similarity_threshold:
-            is_greeting = any(kw in query_lower for kw in ["hi", "hello", "chào", "bạn ơi"])
+            # Fallback chung
+            is_greeting = any(kw in query_lower for kw in ["hi", "hello", "chào", "alo"])
             if is_greeting:
                 greeting_prompt = f"""
                 Người dùng: "{query}"
@@ -291,7 +317,7 @@ class PetChatRAG:
                 return { "response": self.llm_generate_with_retry(greeting_prompt), "sources": [], "fallback": False, "processing_time": 0, "max_similarity": 0 }
 
             return {
-                "response": "Dạ em tìm trong kho thì chưa thấy thông tin phù hợp ạ.\nBạn có muốn **chat trực tiếp với nhân viên** để được tư vấn kỹ hơn không?",
+                "response": "Dạ em chưa có thông tin chi tiết về vấn đề này trong cơ sở dữ liệu.\n\n💡 Bạn có thể:\n- Thử hỏi cách khác (ví dụ: 'chó rụng lông nhiều' thay vì 'chó bị rụng lông')\n- **Chat trực tiếp với nhân viên** để được tư vấn kỹ hơn",
                 "sources": [],
                 "fallback": True,
                 "processing_time": round(time.time() - start, 2),
@@ -308,3 +334,36 @@ class PetChatRAG:
             "processing_time": round(time.time() - start, 2),
             "max_similarity": max_score
         }
+
+    def generate_answer(self, query, relevant_data, animal_type=None):
+        # Lấy tối đa 5 câu để context không quá dài
+        context_items = []
+        for idx, row in relevant_data.head(5).iterrows():
+            context_items.append(f"- Câu hỏi: {row['question']}\n  Trả lời: {row['answers']}")
+        
+        context = "\n\n".join(context_items)
+        
+        animal_instruction = ""
+        if animal_type == "Mèo":
+            animal_instruction = "Bạn đang tư vấn cho một khách hàng có mèo. Hãy đưa ra lời khuyên chăm sóc mèo."
+        elif animal_type == "Chó":
+            animal_instruction = "Bạn đang tư vấn cho một khách hàng có chó. Hãy đưa ra lời khuyên chăm sóc chó."
+        
+        prompt = f"""
+        Bạn là trợ lý chuyên gia chăm sóc thú cưng của TinyPaws.
+        
+        {animal_instruction}
+        
+        THÔNG TIN THAM KHẢO (Từ cơ sở kiến thức):
+        {context}
+
+        CÂU HỎI: "{query}"
+        
+        QUY TẮC TRẢ LỜI:
+        1. Dựa vào thông tin tham khảo trên để trả lời.
+        2. Nếu thông tin không đủ chi tiết, hãy đưa ra lời khuyên chung và gợi ý: "Bạn nên đưa bé đến bác sĩ thú y để được khám kỹ hơn."
+        3. Trả lời ngắn gọn, dễ hiểu, thân thiện.
+        4. KHÔNG dùng icon 🐾 trong câu trả lời.
+        5. Nếu câu hỏi về bệnh nghiêm trọng (sỏi thận, tiết niệu, ung thư...), LUÔN khuyên đi bác sĩ.
+        """
+        return self.llm_generate_with_retry(prompt)
