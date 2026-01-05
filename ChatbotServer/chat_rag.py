@@ -13,7 +13,6 @@ INDEX_PATH = os.path.join(BASE_DIR, "faiss_index.bin")
 DATA_PATH = os.path.join(BASE_DIR, "qa_cache.parquet")
 # ========================
 
-# 🔥 EXPORT để main.py import được
 __all__ = ['PetChatRAG', 'INDEX_PATH', 'DATA_PATH']
 
 class PetChatRAG:
@@ -25,37 +24,31 @@ class PetChatRAG:
         self.index = None
         self.llm_model = None
         self.embedding_dimension = None
-        self.similarity_threshold = 0.35  # Giảm từ 0.55 xuống 0.35
+        self.similarity_threshold = 0.35 
 
         genai.configure(api_key=self.api_key)
-        self.llm_model = genai.GenerativeModel("models/gemini-2.0-flash")
+        self.llm_model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
-    # === Load data ===
     def load_data(self):
         try:
             self.df = pd.read_excel(self.data_file)
             
-            # 🔥 THÊM: Test với 100 câu đầu tiên (xóa sau khi test xong)
-            # self.df = self.df.head(100)  # Uncomment dòng này để test nhanh
-            
-            print(f"✅ Data loaded from {self.data_file} ({len(self.df)} records)")
+            print(f"Data loaded from {self.data_file} ({len(self.df)} records)")
 
-            # 🔥 FIX: Không normalize tiếng Việt (gây mất dấu)
+            # chuẩn hóa dữ liệu
             self.df["question"] = self.df["question"].astype(str).str.lower()
             self.df["answers"] = self.df["answers"].astype(str)
             
-            # Debug: In ra 3 câu đầu
-            print("\n📋 Sample data:")
+            print("\nSample data:")
             for idx in range(min(3, len(self.df))):
                 print(f"  Q{idx+1}: {self.df.iloc[idx]['question'][:60]}...")
                 print(f"  A{idx+1}: {self.df.iloc[idx]['answers'][:60]}...")
 
             return True
         except Exception as e:
-            print(f"❌ Error loading data: {e}")
+            print(f"Error loading data: {e}")
             return False
 
-    # === Embedding ===
     def get_embedding(self, text):
         try:
             result = genai.embed_content(model=self.embedding_model_name, content=text)
@@ -64,7 +57,6 @@ class PetChatRAG:
             print(f"Error getting embedding: {e}")
             return None
 
-    # === Retry wrapper for LLM ===
     def llm_generate_with_retry(self, prompt, max_retries=3, backoff=2.0):
         for attempt in range(max_retries):
             try:
@@ -76,7 +68,6 @@ class PetChatRAG:
                     time.sleep(backoff * (attempt + 1))
         return "Xin lỗi, tôi tạm thời không thể trả lời lúc này."
 
-    # === Build FAISS index (Cosine) ===
     def build_index(self):
         print("Building embeddings...")
         self.df["embedding"] = (
@@ -95,8 +86,6 @@ class PetChatRAG:
         self.index.add(embeddings)
         print(f"FAISS index built successfully ({len(embeddings)} vectors).")
 
-
-    # === Cache ===
     def save_cache(self, index_path="faiss_index.bin", data_path="qa_cache.parquet"):
         try:
             faiss.write_index(self.index, index_path)
@@ -117,7 +106,6 @@ class PetChatRAG:
             print(f"Error loading cache: {e}")
             return False
 
-    # === Setup ===
     def setup_with_cache(self):
         print("Initializing chatbot...")
         if self.load_cache():
@@ -129,7 +117,6 @@ class PetChatRAG:
         self.save_cache()
         print("Chatbot ready with new embeddings!")
 
-    # === Retrieval (FIX: Thêm Keyword Matching) ===
     def find_relevant_products(self, query, k=3):
         query_emb = self.get_embedding(query)
         vector_results = pd.DataFrame()
@@ -141,7 +128,7 @@ class PetChatRAG:
             vector_results = self.df.iloc[I[0]].copy()
             vector_results["score"] = D[0]
         
-        # 🔥 THÊM: Keyword Matching để tìm chính xác hơn
+        # Thêm: Keyword để tìm chính xác hơn
         query_lower = query.lower()
         important_keywords = [
             "rụng lông", "rụng", "chăm sóc", "dinh dưỡng", "vaccine", "tắm", 
@@ -165,9 +152,8 @@ class PetChatRAG:
         if matched_indices:
             keyword_results = self.df.loc[list(matched_indices)].copy()
             keyword_results["score"] = 0.85
-            print(f"✅ Tổng {len(keyword_results)} kết quả từ keyword matching")
-        
-        # Gộp kết quả
+            print(f"Tổng {len(keyword_results)} kết quả từ keyword matching")
+
         if not keyword_results.empty and not vector_results.empty:
             final_results = pd.concat([keyword_results, vector_results])
         elif not keyword_results.empty:
@@ -181,47 +167,7 @@ class PetChatRAG:
         final_results = final_results.nlargest(k, "score")
         
         return final_results, final_results["score"].tolist()
-
-    # === Generation ===
-    def generate_answer(self, query, relevant_data, animal_type=None):
-        # Lấy tối đa 5 câu để context không quá dài
-        context_items = []
-        for idx, row in relevant_data.head(5).iterrows():
-            context_items.append(f"- Câu hỏi: {row['question']}\n  Trả lời: {row['answers']}")
         
-        context = "\n\n".join(context_items)
-        
-        animal_instruction = ""
-        if animal_type:
-            animal_instruction = f"""
-            🚨 YÊU CẦU VỀ ĐỘNG VẬT:
-            - Khách hỏi về: {animal_type.upper()}.
-            - CHỈ trả lời thông tin liên quan đến {animal_type}.
-            """
-        
-        prompt = f"""
-        Bạn là trợ lý AI chuyên về Thú Cưng (TinyPaws).
-        
-        Nhiệm vụ: Trả lời câu hỏi dựa trên thông tin tham khảo.
-        
-        QUY TẮC AN TOÀN (QUAN TRỌNG):
-        1. KIỂM TRA ĐỐI TƯỢNG: 
-           - Nếu câu hỏi dùng chủ ngữ là con người (ví dụ: "tôi bị...", "chân tôi", "con tôi", "người yêu"...), hãy TỪ CHỐI TRẢ LỜI NGAY.
-           - Chỉ nói ngắn gọn: "TinyPaws chỉ chuyên tư vấn sức khỏe cho chó mèo thôi ạ, sen đi khám bác sĩ người nha! 🐾".
-           - TUYỆT ĐỐI KHÔNG đưa ra lời khuyên y tế cho người (kể cả khi bạn biết).
-           
-        2. CHỈ TRẢ LỜI KHI: Câu hỏi liên quan đến chó, mèo, thú cưng.
-        
-        {animal_instruction}
-        
-        Thông tin tham khảo (Dành cho thú cưng):
-        {context}
-
-        Câu hỏi: {query}
-        """
-        return self.llm_generate_with_retry(prompt)
-
-    # === Chat (FIX: Thêm fallback thông minh) ===
     def chat(self, query, history=None, k=8):
         start = time.time()
         query_lower = query.lower()
@@ -284,11 +230,9 @@ class PetChatRAG:
         relevant, scores = self.find_relevant_products(context_query, k)
         max_score = float(max(scores)) if len(scores) else 0.0
         
-        print(f"🔎 Tìm được {len(relevant)} kết quả | Score cao nhất: {max_score:.2f}")
+        print(f"Tìm được {len(relevant)} kết quả | Score cao nhất: {max_score:.2f}")
 
-        # --- 5. KIỂM TRA KẾT QUẢ (FIX: Thêm fallback thông minh) ---
         if relevant.empty or max_score < self.similarity_threshold:
-            # 🔥 FALLBACK THÔNG MINH
             fallback_topics = {
                 "rụng lông": "Chó rụng lông có thể do thiếu dinh dưỡng, ký sinh trùng hoặc stress. Bạn nên:\n- Bổ sung Omega-3/6 (dầu cá)\n- Tắm đúng cách 2-4 tuần/lần\n- Đưa bé đi khám bác sĩ nếu rụng nhiều bất thường",
                 
@@ -306,8 +250,7 @@ class PetChatRAG:
                         "processing_time": round(time.time() - start, 2),
                         "max_similarity": max_score
                     }
-            
-            # Fallback chung
+
             is_greeting = any(kw in query_lower for kw in ["hi", "hello", "chào", "alo"])
             if is_greeting:
                 greeting_prompt = f"""
@@ -329,7 +272,7 @@ class PetChatRAG:
         
         return {
             "response": answer,
-            "sources": [],  # ⭐ Để rỗng vì PetRAG không trả về sản phẩm
+            "sources": [],  
             "fallback": False,
             "processing_time": round(time.time() - start, 2),
             "max_similarity": max_score

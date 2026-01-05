@@ -18,18 +18,18 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
     // Fetch products from API with retry logic
     const fetchProducts = async (page = 1, retryCount = 0) => {
         const maxRetries = 3;
-        
+
         try {
             setLoading(true);
             setError('');
-            
+
             // Check if user has token and is admin
             if (!token || !isAdmin) {
                 setError('Bạn không có quyền truy cập');
                 setLoading(false);
                 return;
             }
-            
+
             // Build query params with filters
             const params = {
                 page,
@@ -54,6 +54,9 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
                 if (filters.stock && filters.stock !== 'all') {
                     params.stock = filters.stock;
                 }
+                if (filters.target && filters.target !== 'all') {
+                    params.target = filters.target; // ⭐ THÊM PARAM MỚI
+                }
             }
 
 
@@ -68,7 +71,7 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
         } catch (error) {
             // Check if it's a network error and we can retry
             const isNetworkError = !error.response || error.code === 'NETWORK_ERROR' || error.code === 'ECONNABORTED';
-            
+
             if (isNetworkError && retryCount < maxRetries) {
                 // Wait a bit before retrying (exponential backoff)
                 setTimeout(() => {
@@ -76,7 +79,7 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
                 }, Math.pow(2, retryCount) * 1000); // 1s, 2s, 4s
                 return;
             }
-            
+
             // Set error message based on error type
             let errorMessage = 'Không thể tải danh sách sản phẩm';
             if (error.response?.status === 401) {
@@ -88,7 +91,7 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
             } else if (isNetworkError) {
                 errorMessage = 'Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng.';
             }
-            
+
             setError(errorMessage);
         } finally {
             setLoading(false);
@@ -127,24 +130,24 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
     const handleToggleStatus = async (product) => {
         try {
             const newStatus = !product.is_active;
-            
+
             const response = await adminApi.put(`/products/${product._id}`, {
                 is_active: newStatus
             });
 
             if (response.data.success) {
                 setError('');
-                
+
                 // Update local state
                 setProducts(prevProducts => {
-                    const mapped = prevProducts.map(p => 
-                        p._id === product._id 
+                    const mapped = prevProducts.map(p =>
+                        p._id === product._id
                             ? { ...p, is_active: newStatus }
                             : p
                     );
                     return moveProductToTop(mapped, product._id);
                 });
-                
+
             }
         } catch (error) {
             setError('Có lỗi xảy ra khi cập nhật trạng thái sản phẩm');
@@ -155,24 +158,24 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
     const handleToggleFeatured = async (product) => {
         try {
             const newFeaturedStatus = !product.is_featured;
-            
+
             const response = await adminApi.put(`/products/${product._id}`, {
                 is_featured: newFeaturedStatus
             });
 
             if (response.data.success) {
                 setError('');
-                
+
                 // Update local state
                 setProducts(prevProducts => {
-                    const mapped = prevProducts.map(p => 
-                        p._id === product._id 
+                    const mapped = prevProducts.map(p =>
+                        p._id === product._id
                             ? { ...p, is_featured: newFeaturedStatus }
                             : p
                     );
                     return moveProductToTop(mapped, product._id);
                 });
-                
+
             }
         } catch (error) {
             setError('Có lỗi xảy ra khi cập nhật trạng thái nổi bật');
@@ -298,52 +301,52 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
                             products.map((product, index) => {
                                 const serialNumber = (currentPage - 1) * ITEMS_PER_PAGE + index + 1;
                                 return (
-                                <tr key={product._id} className="hover:bg-gray-50">
-                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
-                                        {serialNumber}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="flex items-center">
-                                            <div className="flex-shrink-0 h-12 w-12">
-                                                {product.images && product.images.length > 0 ? (
-                                                    <img
-                                                        className="h-12 w-12 rounded-lg object-cover"
-                                                        src={getSafeImageUrl(product.images, "48x48", "N/A")}
-                                                        alt={product.name}
-                                                        onError={(e) => handleImageError(e, "48x48", "N/A")}
-                                                    />
-                                                ) : (
-                                                    <div className="h-12 w-12 rounded-lg bg-gray-200 flex items-center justify-center">
-                                                        <FaImage className="h-6 w-6 text-gray-400" />
+                                    <tr key={product._id} className="hover:bg-gray-50">
+                                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                                            {serialNumber}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex items-center">
+                                                <div className="flex-shrink-0 h-12 w-12">
+                                                    {product.images && product.images.length > 0 ? (
+                                                        <img
+                                                            className="h-12 w-12 rounded-lg object-cover"
+                                                            src={getSafeImageUrl(product.images, "48x48", "N/A")}
+                                                            alt={product.name}
+                                                            onError={(e) => handleImageError(e, "48x48", "N/A")}
+                                                        />
+                                                    ) : (
+                                                        <div className="h-12 w-12 rounded-lg bg-gray-200 flex items-center justify-center">
+                                                            <FaImage className="h-6 w-6 text-gray-400" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="ml-4">
+                                                    <div className="text-sm font-medium text-gray-900 max-w-xs truncate">
+                                                        {product.name}
                                                     </div>
-                                                )}
-                                            </div>
-                                            <div className="ml-4">
-                                                <div className="text-sm font-medium text-gray-900 max-w-xs truncate">
-                                                    {product.name}
-                                                </div>
-                                                <div className="text-sm text-gray-500">
-                                                    ID: {product._id.slice(-6)}
+                                                    <div className="text-sm text-gray-500">
+                                                        ID: {product._id.slice(-6)}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm text-gray-900">
-                                            {product.category?.name || 'Chưa phân loại'}
-                                        </div>
-                                    </td>
-                                    <td className="px-3 py-4 whitespace-nowrap">
-                                        <div className="text-sm text-gray-900 text-center">
-                                            {product.stock_quantity}
-                                        </div>
-                                        {product.stock_quantity <= 5 && (
-                                            <div className="text-xs text-red-500 text-center">
-                                                Hết
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm text-gray-900">
+                                                {product.category?.name || 'Chưa phân loại'}
                                             </div>
-                                        )}
-                                    </td>
-                                    {/* <td className="px-6 py-4 whitespace-nowrap">
+                                        </td>
+                                        <td className="px-3 py-4 whitespace-nowrap">
+                                            <div className="text-sm text-gray-900 text-center">
+                                                {product.stock_quantity}
+                                            </div>
+                                            {product.stock_quantity <= 5 && (
+                                                <div className="text-xs text-red-500 text-center">
+                                                    Hết
+                                                </div>
+                                            )}
+                                        </td>
+                                        {/* <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
                                             <label className="relative inline-flex items-center cursor-pointer">
                                                 <input
@@ -361,47 +364,46 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
                                             </span>
                                         </div>
                                     </td> */}
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {formatDate(product.createdAt)}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="flex items-center">
-                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={product.is_featured || false}
-                                                    onChange={() => handleToggleFeatured(product)}
-                                                    className="sr-only peer"
-                                                />
-                                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
-                                            </label>
-                                            <span className={`ml-2 text-xs font-medium ${
-                                                product.is_featured ? 'text-amber-600' : 'text-gray-500'
-                                            }`}>
-                                                {product.is_featured}
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <div className="flex justify-end space-x-2">
-                                            <button
-                                                onClick={() => onEdit(product)}
-                                                className="text-blue-600 hover:text-blue-900 p-2 rounded-full hover:bg-blue-50"
-                                                title="Chỉnh sửa"
-                                            >
-                                                <FaEdit className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                onClick={() => onDelete(product)}
-                                                className="text-red-600 hover:text-red-900 p-2 rounded-full hover:bg-red-50"
-                                                title="Xóa"
-                                            >
-                                                <FaTrash className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            );
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            {formatDate(product.createdAt)}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex items-center">
+                                                <label className="relative inline-flex items-center cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={product.is_featured || false}
+                                                        onChange={() => handleToggleFeatured(product)}
+                                                        className="sr-only peer"
+                                                    />
+                                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                                                </label>
+                                                <span className={`ml-2 text-xs font-medium ${product.is_featured ? 'text-amber-600' : 'text-gray-500'
+                                                    }`}>
+                                                    {product.is_featured}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <div className="flex justify-end space-x-2">
+                                                <button
+                                                    onClick={() => onEdit(product)}
+                                                    className="text-blue-600 hover:text-blue-900 p-2 rounded-full hover:bg-blue-50"
+                                                    title="Chỉnh sửa"
+                                                >
+                                                    <FaEdit className="h-4 w-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => onDelete(product)}
+                                                    className="text-red-600 hover:text-red-900 p-2 rounded-full hover:bg-red-50"
+                                                    title="Xóa"
+                                                >
+                                                    <FaTrash className="h-4 w-4" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
                             })
                         )}
                     </tbody>
@@ -423,7 +425,7 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
                             >
                                 Trước
                             </button>
-                            
+
                             {/* Page numbers */}
                             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                                 const pageNum = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i;
@@ -431,17 +433,16 @@ const ProductsTable = ({ onEdit, onDelete, refreshTrigger, searchTerm, filters }
                                     <button
                                         key={pageNum}
                                         onClick={() => handlePageChange(pageNum)}
-                                        className={`px-3 py-2 text-sm font-medium rounded-md ${
-                                            pageNum === currentPage
+                                        className={`px-3 py-2 text-sm font-medium rounded-md ${pageNum === currentPage
                                                 ? 'bg-blue-600 text-white'
                                                 : 'text-gray-500 bg-white border border-gray-300 hover:bg-gray-50'
-                                        }`}
+                                            }`}
                                     >
                                         {pageNum}
                                     </button>
                                 );
                             })}
-                            
+
                             <button
                                 onClick={() => handlePageChange(currentPage + 1)}
                                 disabled={currentPage === totalPages}

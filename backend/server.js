@@ -91,7 +91,7 @@ app.post('/debug/fix-invalid-categories', async (req, res) => {
                 // If no match, try keyword matching
                 if (!matchedCategory) {
                     const categoryKeywords = {
-                        'vệ sinh': 'Vệ sinh & Làm đẹp',
+                        'vệ sinh': 'Chăm sóc & Vệ sinh',
                         'thức ăn': 'Thức ăn',
                         'phụ kiện': 'Phụ kiện',
                         'đồ chơi': 'Đồ chơi'
@@ -150,7 +150,7 @@ app.post('/debug/fix-categories', async (req, res) => {
             'Phụ kiện cho mèo': 'Phụ kiện',
             'Đồ chơi cho chó': 'Đồ chơi',
             'Đồ chơi cho mèo': 'Đồ chơi',
-            'Vệ sinh & Làm đẹp': 'Vệ sinh & Làm đẹp'
+            'Chăm sóc & Vệ sinh': 'Chăm sóc & Vệ sinh'
         };
 
         // Get all products

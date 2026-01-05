@@ -210,15 +210,6 @@ const HeaderMobile = () => {
                                         Mèo
                                     </Link>
                                 </li>
-                                {/* <li>
-                                    <Link
-                                        to="/uu-dai"
-                                        className="block py-2 text-gray-800 hover:text-red-500 font-medium"
-                                        onClick={closeMenu}
-                                    >
-                                        Ưu Đãi
-                                    </Link>
-                                </li> */}
                                 <li>
                                     <Link
                                         to="/blog"

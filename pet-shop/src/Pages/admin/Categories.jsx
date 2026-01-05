@@ -169,7 +169,7 @@ const Categories = () => {
             food: 'Thức ăn',
             accessory: 'Phụ kiện',
             toy: 'Đồ chơi',
-            hygiene: 'Vệ sinh & Làm đẹp'
+            hygiene: 'Chăm sóc & Vệ sinh'
         };
         return types[type] || type;
     };
@@ -343,7 +343,7 @@ const Categories = () => {
                                     <option value="food">Thức ăn</option>
                                     <option value="accessory">Phụ kiện</option>
                                     <option value="toy">Đồ chơi</option>
-                                    <option value="hygiene">Vệ sinh & Làm đẹp</option>
+                                    <option value="hygiene">Chăm sóc & Vệ sinh</option>
                                 </select>
                             </div>
 

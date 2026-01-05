@@ -26,6 +26,72 @@ const ChatWidget = () => {
   const [lastMessageTime, setLastMessageTime] = useState(Date.now());
   const [showInactiveWarning, setShowInactiveWarning] = useState(false);
 
+  const makeLocalMessage = (message) => ({
+    ...message,
+    createdAt: message.createdAt || new Date().toISOString(),
+    messageId:
+      message.messageId || `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  });
+
+  const buildMessageKey = (message, fallbackSuffix = "0") => {
+    if (message.messageId) return message.messageId;
+    if (message.createdAt) return `${message.sender}-${message.createdAt}`;
+    return `${message.sender}-${message.text}-${fallbackSuffix}`;
+  };
+
+  const mergeMessageLists = (currentMessages, incomingMessages) => {
+    const mergedMap = new Map();
+
+    currentMessages.forEach((msg, idx) => {
+      mergedMap.set(buildMessageKey(msg, `current-${idx}`), msg);
+    });
+
+    const isLocalMessage = (msg) =>
+      typeof msg?.messageId === "string" && msg.messageId.startsWith("local-");
+
+    const findMatchingLocalKey = (incomingMsg) => {
+      const incomingTime = incomingMsg.createdAt
+        ? new Date(incomingMsg.createdAt).getTime()
+        : null;
+
+      for (const [key, value] of mergedMap.entries()) {
+        if (!isLocalMessage(value)) continue;
+        if (value.sender !== incomingMsg.sender) continue;
+        if ((value.text || "").trim() !== (incomingMsg.text || "").trim()) continue;
+
+        if (incomingTime && value.createdAt) {
+          const localTime = new Date(value.createdAt).getTime();
+          if (Math.abs(incomingTime - localTime) > 5000) continue;
+        }
+
+        return key;
+      }
+      return null;
+    };
+
+    incomingMessages.forEach((msg, idx) => {
+      let key = buildMessageKey(msg, `incoming-${idx}`);
+
+      if (!isLocalMessage(msg)) {
+        const duplicateKey = findMatchingLocalKey(msg);
+        if (duplicateKey) {
+          key = duplicateKey;
+        }
+      }
+
+      mergedMap.set(key, msg);
+    });
+
+    const merged = Array.from(mergedMap.values());
+    merged.sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return aTime - bTime;
+    });
+
+    return merged;
+  };
+
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -39,7 +105,7 @@ const ChatWidget = () => {
   const MESSAGE_SEND_URL = `${API_BASE_URL}/api/messages`;
   const CLEAR_HISTORY_URL = `${API_BASE_URL}/api/chat/clear-history`;
 
-  
+
   // Khi mở popup chat: nếu đã đăng nhập và chưa load lịch sử thì gọi API history
   useEffect(() => {
     if (isOpen && isAuthenticated && !initialLoaded) {
@@ -48,10 +114,10 @@ const ChatWidget = () => {
     if (isOpen && !isAuthenticated) {
       // Gợi ý đăng nhập nếu user chưa đăng nhập
       setMessages([
-        {
+        makeLocalMessage({
           sender: "bot",
           text: "Bạn cần đăng nhập để sử dụng trợ lý TinyPaws 🐾. Vui lòng đăng nhập trước nhé.",
-        },
+        }),
       ]);
     }
   }, [isOpen, isAuthenticated]);
@@ -123,7 +189,7 @@ const ChatWidget = () => {
           sender_info: m.sender_info
         }));
 
-        setMessages(mapped);
+        setMessages((prev) => mergeMessageLists(prev, mapped));
 
         // ⭐ LOGIC ĐƠN GIẢN: Chỉ cập nhật thời gian, KHÔNG đụng showSupportButton
         if (sortedMessages.length > 0) {
@@ -145,7 +211,7 @@ const ChatWidget = () => {
     }
 
     const userMessage = input.trim();
-    setMessages((prev) => [...prev, { sender: "user", text: userMessage }]);
+    setMessages((prev) => [...prev, makeLocalMessage({ sender: "user", text: userMessage })]);
     setInput("");
     setLoading(true);
 
@@ -179,12 +245,12 @@ const ChatWidget = () => {
         }
 
         const botReply = reply || "Xin lỗi 😿, chatbot đang gặp sự cố.";
-        const botMessage = {
+        const botMessage = makeLocalMessage({
           sender: "bot",
           text: botReply,
           fallback,
           products,
-        };
+        });
 
         setMessages((prev) => [...prev, botMessage]);
 
@@ -209,7 +275,7 @@ const ChatWidget = () => {
         if (!res.data.success) {
           setMessages((prev) => [
             ...prev,
-            { sender: "bot", text: "Không thể gửi tin nhắn đến nhân viên." },
+            makeLocalMessage({ sender: "bot", text: "Không thể gửi tin nhắn đến nhân viên." }),
           ]);
         }
       }
@@ -217,7 +283,7 @@ const ChatWidget = () => {
       console.error("Error sending chat message:", error);
       setMessages((prev) => [
         ...prev,
-        { sender: "bot", text: "Xin lỗi 😿, chatbot đang gặp sự cố." },
+        makeLocalMessage({ sender: "bot", text: "Xin lỗi 😿, chatbot đang gặp sự cố." }),
       ]);
     } finally {
       setLoading(false);
@@ -253,16 +319,16 @@ const ChatWidget = () => {
 
         setMessages((prev) => [
           ...prev,
-          {
+          makeLocalMessage({
             sender: "system",
             text: `🙋 Đã kết nối với ${admin_info.full_name}. Bạn có thể nhắn tin trực tiếp ngay bây giờ!`,
-          },
+          }),
         ]);
       }
     } catch (error) {
       setMessages((prev) => [
         ...prev,
-        { sender: "bot", text: "Không thể kết nối với nhân viên hỗ trợ lúc này." },
+        makeLocalMessage({ sender: "bot", text: "Không thể kết nối với nhân viên hỗ trợ lúc này." }),
       ]);
     } finally {
       setLoading(false);
@@ -335,10 +401,10 @@ const ChatWidget = () => {
         }
       } else {
         setMessages([
-          {
+          makeLocalMessage({
             sender: "bot",
             text: "Xin chào! Tôi là trợ lý TinyPaws 🐾. Bạn muốn hỏi gì về thú cưng hôm nay?",
-          },
+          }),
         ]);
         setMode("bot");
         localStorage.setItem('chat_mode', 'bot');
@@ -348,10 +414,10 @@ const ChatWidget = () => {
     } catch (error) {
       console.error("❌ Error loading chat history:", error);
       setMessages([
-        {
+        makeLocalMessage({
           sender: "bot",
           text: "Xin chào! Tôi là trợ lý TinyPaws 🐾. Bạn muốn hỏi gì về thú cưng hôm nay?",
-        },
+        }),
       ]);
       setMode("bot");
       localStorage.setItem('chat_mode', 'bot');
@@ -371,10 +437,10 @@ const ChatWidget = () => {
 
       // ⭐ Reset state VÀ localStorage
       setMessages([
-        {
+        makeLocalMessage({
           sender: "bot",
           text: "Xin chào! Tôi là trợ lý TinyPaws. Bạn muốn hỏi gì về thú cưng hôm nay?",
-        },
+        }),
       ]);
       setSessionId(null);
       setMode("bot");
@@ -407,11 +473,10 @@ const ChatWidget = () => {
       // Thêm tin nhắn thông báo
       setMessages((prev) => [
         ...prev,
-        {
+        makeLocalMessage({
           sender: "system",
           text: "✅ Đã kết thúc hỗ trợ. Bạn có thể tiếp tục chat với trợ lý AI TinyPaws!",
-          messageId: `system_${Date.now()}`
-        },
+        }),
       ]);
     } catch (error) {
       console.error("Lỗi kết thúc hỗ trợ:", error);

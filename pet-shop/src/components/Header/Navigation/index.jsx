@@ -167,13 +167,6 @@ const Navigation = () => {
                                     <Button className='link transition !font-[500] !text-[rgba(0,0,0,0.8)] hover:!text-[#ff5252] hover:!bg-[#ff5252]/5'>Blog</Button>
                                 </Link>
                             </li>
-                            {/* <li className="list-none">
-                                <Link to="/uu-dai" className='link transition'>
-                                    <Button className='link transition !font-[500] !text-[rgba(0,0,0,0.8)] hover:!text-[#ff5252] hover:!bg-[#ff5252]/5'>
-                                        Ưu đãi
-                                    </Button>
-                                </Link>
-                            </li> */}
                             <li className="list-none">
                                 <Link to="/lien-he" className='link transition'>
                                     <Button className='link transition !font-[500] !text-[rgba(0,0,0,0.8)] hover:!text-[#ff5252] hover:!bg-[#ff5252]/5'>Liên hệ</Button>

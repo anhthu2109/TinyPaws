@@ -14,6 +14,7 @@ const ProductsAdminPage = () => {
     const [showFilters, setShowFilters] = useState(false);
     const [filters, setFilters] = useState({
         category: 'all',
+        target: 'all', // ⭐ THÊM FILTER MỚI
         status: 'all',
         stock: 'all'
     });
@@ -103,6 +104,7 @@ const ProductsAdminPage = () => {
         setSearchTerm('');
         setFilters({
             category: 'all',
+            target: 'all', // ⭐ RESET TARGET
             status: 'all',
             stock: 'all'
         });
@@ -164,6 +166,7 @@ const ProductsAdminPage = () => {
                     </div>
                 )}
 
+                
                 {/* Search and Filter Bar */}
                 <div className="bg-white rounded-lg shadow mb-6">
                     <div className="p-6">
@@ -203,7 +206,7 @@ const ProductsAdminPage = () => {
 
                         {showFilters && (
                             <div className="mt-4 pt-4 border-t border-gray-200">
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Danh mục
@@ -222,6 +225,23 @@ const ProductsAdminPage = () => {
                                                     {cat.name}
                                                 </option>
                                             ))}
+                                        </select>
+                                    </div>
+
+                                    {/* ⭐ THÊM FILTER ĐỐI TƯỢNG */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Đối tượng
+                                        </label>
+                                        <select
+                                            value={filters.target}
+                                            onChange={(e) => handleFilterChange('target', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        >
+                                            <option value="all">Tất cả</option>
+                                            <option value="cho">Chó</option>
+                                            <option value="meo">Mèo</option>
+                                            <option value="ca-cho-va-meo">Cả hai</option>
                                         </select>
                                     </div>
 

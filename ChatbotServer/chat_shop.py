@@ -9,11 +9,9 @@ from pymongo import MongoClient
 from threading import Thread
 import re
 
-# === SỬA LỖI ĐƯỜNG DẪN ===
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SHOP_INDEX_PATH = os.path.join(BASE_DIR, "shop_faiss.bin")
 SHOP_DATA_PATH = os.path.join(BASE_DIR, "shop_cache.parquet")
-# ========================
 
 
 class ShopRAGMongo:
@@ -22,7 +20,7 @@ class ShopRAGMongo:
         self.mongo_uri = mongo_uri
         self.db_name = db_name
         self.collection_name = collection
-        self.categories_collection_name = categories_collection # Lưu tên bảng category
+        self.categories_collection_name = categories_collection
         self.embedding_model_name = "models/text-embedding-004"
         
         self.df = pd.DataFrame()
@@ -31,10 +29,10 @@ class ShopRAGMongo:
         self.db_client = None
         self.db_collection = None
         self.embedding_dimension = 768
-        self.similarity_threshold = 0.45 # Có thể giảm xuống 0.5 nếu muốn tìm rộng hơn
+        self.similarity_threshold = 0.40 
 
         genai.configure(api_key=self.api_key)
-        self.llm_model = genai.GenerativeModel("models/gemini-2.0-flash")
+        self.llm_model = genai.GenerativeModel("gemini-2.5-flash-lite")
         
         try:
             self.db_client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
@@ -44,17 +42,14 @@ class ShopRAGMongo:
             print(f"Lỗi kết nối MongoDB: {e}")
             self.db_client = None
 
-        self.available_brands = []  # ⭐ Thêm cache brands
+        self.available_brands = [] 
         
     # === Lấy danh sách Categories về làm từ điển ===
     def get_category_map(self):
         """Tạo từ điển {ID: Tên Danh Mục}"""
         try:
             cat_coll = self.db_client[self.db_name][self.categories_collection_name]
-            # Chỉ lấy _id và name để tiết kiệm bộ nhớ
             cursor = cat_coll.find({}, {"_id": 1, "name": 1})
-            
-            # Map: "68f91e..." -> "Thức ăn"
             cat_map = {str(doc["_id"]): doc["name"] for doc in cursor}
             return cat_map
         except Exception as e:
@@ -67,15 +62,13 @@ class ShopRAGMongo:
             return False
             
         try:
-            # Bước 1: Lấy từ điển danh mục
             cat_map = self.get_category_map()
             print(f"Đã tải {len(cat_map)} danh mục để tham chiếu.")
 
-            # 🔥 SỬA 1: THÊM "tags" VÀO PROJECTION
             projection = {
                 "name": 1, "description": 1, "price": 1, 
                 "sale_price": 1, "stock_quantity": 1, "category": 1, 
-                "brand": 1, "tags": 1  # <--- QUAN TRỌNG: LẤY TRƯỜNG TAGS
+                "brand": 1, "tags": 1 
             }
             products = list(self.db_collection.find({}, projection))
             
@@ -93,7 +86,6 @@ class ShopRAGMongo:
                 self.df["brand"] = ""
             self.df["brand"] = self.df["brand"].fillna("").astype(str)
 
-            # 🔥 SỬA 2: Xử lý Tags (đảm bảo là list)
             if "tags" not in self.df.columns:
                 self.df["tags"] = [[] for _ in range(len(self.df))]
             
@@ -107,20 +99,17 @@ class ShopRAGMongo:
                 cat_name = cat_map.get(cat_id, "Sản phẩm")
                 brand_name = row.get('brand', '')
                 
-                # 🔥 SỬA 3: BIẾN TAGS THÀNH CHUỖI VĂN BẢN
-                # Ví dụ: tags = ["mèo sỏi thận", "tiết niệu"] -> tags_str = "mèo sỏi thận, tiết niệu"
                 tags_data = row.get('tags', [])
                 if isinstance(tags_data, list):
                     tags_str = ", ".join([str(t) for t in tags_data])
                 else:
                     tags_str = str(tags_data)
-                
-                # Nhồi tags vào chuỗi full_text để AI "đọc" được
+
                 return (
-                    f"Từ khóa tags: {tags_str}. "  # <--- ĐƯA TAGS LÊN ĐẦU ĐỂ ƯU TIÊN
+                    f"Từ khóa tags: {tags_str}. "
+                    f"Tên: {row['name']}. " 
                     f"Thương hiệu: {brand_name}. "
                     f"Loại: {cat_name}. "
-                    f"Tên: {row['name']}. "
                     f"Mô tả: {row.get('description', '')}. "
                     f"Giá: {price_str} VND. "
                     f"Kho: {row.get('stock_quantity', 0)}"
@@ -132,8 +121,7 @@ class ShopRAGMongo:
         except Exception as e:
             print(f"Lỗi load data: {e}")
             return False
-    
-    # === Embedding ===
+
     def get_embedding(self, text):
         try:
             result = genai.embed_content(model=self.embedding_model_name, content=text)
@@ -142,7 +130,6 @@ class ShopRAGMongo:
             print(f"Error getting embedding: {e}")
             return None
 
-    # === Retry wrapper for LLM ===
     def llm_generate_with_retry(self, prompt, max_retries=3, backoff=2.0):
         for attempt in range(max_retries):
             try:
@@ -154,8 +141,6 @@ class ShopRAGMongo:
                     time.sleep(backoff * (attempt + 1))
         return "Xin lỗi, tôi tạm thời không thể trả lời lúc này."
 
-
-    # === Build FAISS index (Cosine) ===
     def build_index(self):
         print("Đang tạo embeddings cho sản phẩm...")
         if self.df.empty or 'full_text' not in self.df.columns:
@@ -181,7 +166,6 @@ class ShopRAGMongo:
         self.index.add(embeddings)
         print(f"FAISS index được tạo với {len(self.df)} sản phẩm.")
 
-    # === Cache ===
     def save_cache(self, index_path=SHOP_INDEX_PATH, data_path=SHOP_DATA_PATH):
         try:
             if self.index:
@@ -207,31 +191,23 @@ class ShopRAGMongo:
             return False
 
     def get_available_brands(self):
-        """Lấy danh sách thương hiệu từ DB + Danh sách cứng (Sync với React)"""
         try:
-            # 1. Lấy từ DB
             db_brands = self.db_collection.distinct("brand", {"brand": {"$ne": None, "$ne": ""}})
             db_brands = [b.lower().strip() for b in db_brands if b]
             
-            # 2. 🔥 SỬA: Danh sách cứng (giống brandOptions trong React)
-            # Để đảm bảo dù DB chưa cập nhật, Bot vẫn biết Shop CÓ kinh doanh hãng này
             react_brands = [
                 'doggyman', 'goodies', 'orgo', 'smartheart', 'ganador', 'pawise', 
                 'natural core', 'anf', 'zenith', 'petq', 'me-o', 'royal canin', 
                 'whiskas', 'yu', 'sos', 'absorb plus', 'alkin', 'dorrikey',
-                'pedigree', 'pro plan', 'orijen', 'acana' # Thêm các hãng khác nếu cần
+                'pedigree', 'pro plan', 'orijen', 'acana'
             ]
-            
-            # Gộp lại và loại bỏ trùng lặp
             self.available_brands = list(set(db_brands + react_brands))
-            
-            print(f"📦 Tải được {len(self.available_brands)} thương hiệu.")
+            print(f"Tải được {len(self.available_brands)} thương hiệu.")
             return self.available_brands
         except Exception as e:
             print(f"Lỗi lấy brands: {e}")
             return []
 
-    # === Setup ===
     def setup(self, start_watcher=False):
         print("Đang khởi tạo ShopRAG...")
         if self.load_cache():
@@ -244,19 +220,18 @@ class ShopRAGMongo:
                 self.build_index()
                 self.save_cache()
         
-        # ⭐ Load danh sách brands
         self.get_available_brands()
-        
         print("ShopRAG sẵn sàng!")
         
         if start_watcher and self.db_collection is not None:
             self.start_change_stream_watcher()
     
     # === Retrieval: Hybrid Search (Vector + Keyword) ===
-    def find_relevant_products(self, query, k=8):
+    def find_relevant_products(self, query, k=12):
         query_emb = self.get_embedding(query)
         vector_results = pd.DataFrame()
-        
+
+        # ===== 1. VECTOR SEARCH (FAISS) =====
         if query_emb is not None and self.index and self.index.ntotal > 0:
             q_vec = np.array([query_emb], dtype="float32")
             faiss.normalize_L2(q_vec)
@@ -264,52 +239,81 @@ class ShopRAGMongo:
             vector_results = self.df.iloc[I[0]].copy()
             vector_results["score"] = D[0]
 
+        # ===== 2. EXACT NAME BOOST =====
         keyword_results = pd.DataFrame()
+        exact_results = pd.DataFrame()
         if not self.df.empty:
-            query_lower = query.lower()
-            
-            # 🔥 THÊM TÊN THƯƠNG HIỆU VÀO DANH SÁCH QUAN TRỌNG
-            important_keywords = [
-                # Bệnh lý
-                "sỏi thận", "thận", "tiết niệu", "urinary","triệt sản", "bầu", "mang thai",
-                # Độ tuổi
-                "mèo con", "chó con", "kitten", "puppy",
-                # Giống loài
-                "poodle", "golden", "corgi", "husky", "beagle", "persian", "scottish",
-                # Thương hiệu (⭐ THÊM MỚI)
-                "royal canin", "ganador", "whiskas", "pedigree",
-                "anf", "a.n.f", "advance", "pro plan", "proplan",
-                "taste of the wild", "orijen", "acana", "farmina",
-                "petq", "smartheart", "doggyman", "cat's eye",
-                # Động vật
-                "chó", "mèo", "dog", "cat"
+            query_lower = query.lower().strip()
+            normalized_query = re.sub(r"\s+", " ", query_lower)
+
+            if len(normalized_query) >= 6:
+                exact_mask = self.df["name"].str.lower().str.contains(normalized_query, na=False, regex=False)
+                if exact_mask.any():
+                    exact_results = self.df.loc[exact_mask].copy()
+                    exact_results["score"] = 5.0
+
+            keyword_weights = [
+                ("royal canin", 3.0), ("pedigree", 2.5), ("ganador", 2.5), ("whiskas", 2.5),
+                ("smartheart", 2.5), ("me-o", 2.5), ("anf", 2.0), ("zenith", 2.0),
+                ("giường", 1.8), ("ổ", 1.8), ("đệm", 1.8), ("nệm", 1.8), ("chuồng", 1.8),
+                ("đồ chơi", 1.8), ("toy", 1.8),
+                ("nhà", 1.5), ("vòng cổ", 1.5), ("dây dắt", 1.5), ("balo", 1.5), ("túi", 1.5),
+                ("sữa", 1.5), ("sữa bột", 1.5), ("milk", 1.5),
+                ("thức ăn", 1.2), ("hạt", 1.2), ("pate", 1.2), ("súp", 1.0), ("bánh thưởng", 1.0),
+                ("mèo con", 1.0), ("chó con", 1.0), ("kitten", 1.0), ("puppy", 1.0),
+                ("chó", 0.8), ("mèo", 0.8)
             ]
-            
-            matched_indices = set()
-            for kw in important_keywords:
-                if kw in query_lower:
-                    matches = self.df[self.df["full_text"].str.contains(kw, case=False, na=False)]
-                    if not matches.empty:
-                        matched_indices.update(matches.index.tolist())
-                        print(f"🔍 Tìm thấy {len(matches)} sản phẩm có từ khóa '{kw}'")
 
-            if matched_indices:
-                keyword_results = self.df.loc[list(matched_indices)].copy()
-                keyword_results["score"] = 1.0
+            score_map = {}
 
-        final_results = pd.concat([keyword_results, vector_results])
+            for idx, row in self.df.iterrows():
+                name = str(row.get("name", "")).lower()
+                tags = (
+                    " ".join([str(t).lower() for t in row.get("tags", [])])
+                    if isinstance(row.get("tags"), list)
+                    else ""
+                )
+                full_text = str(row.get("full_text", "")).lower()
+
+                for kw, base_weight in keyword_weights:
+                    if kw in query_lower:
+                        weight_name = base_weight * 1.5
+                        weight_desc = base_weight
+
+                        if kw in name or kw in tags:
+                            score_map[idx] = score_map.get(idx, 0) + weight_name
+                        elif kw in full_text:
+                            score_map[idx] = score_map.get(idx, 0) + weight_desc
+
+            if score_map:
+                keyword_df = pd.DataFrame(
+                    [(idx, score) for idx, score in score_map.items()],
+                    columns=["idx", "score"]
+                ).sort_values("score", ascending=False)
+
+                keyword_results = self.df.loc[keyword_df["idx"]].copy()
+                keyword_results["score"] = keyword_df["score"].values
+
+        final_results = pd.concat(
+            [exact_results, keyword_results, vector_results], ignore_index=True
+        )
+
+        if not final_results.empty and "score" in final_results.columns:
+            final_results = final_results.sort_values(
+                by="score", ascending=False, na_position="last"
+            )
+
         final_results = final_results.drop_duplicates(subset=["_id"])
-        final_results = final_results.head(k)
-        
+
+        if len(final_results) > k:
+            final_results = final_results.head(max(k, 20))
+
         if final_results.empty:
-             return pd.DataFrame(), []
-             
+            return pd.DataFrame(), []
+
         return final_results, final_results["score"].tolist()
 
-    # === Generation ===
-    # === Generation (Đã sửa Prompt cực đoan & Tags) ===
     def generate_answer(self, query, relevant_data, animal_type=None):
-        # 1. KIỂM TRA RỖNG TUYỆT ĐỐI
         if relevant_data.empty:
              return "Dạ hiện tại TinyPaws chưa có sản phẩm nào phù hợp với yêu cầu của bạn trong kho ạ."
 
@@ -318,28 +322,24 @@ class ShopRAGMongo:
             full_desc = str(row.get('description', ''))
             short_desc = full_desc[:200] + "..." if len(full_desc) > 200 else full_desc
             
-            # --- 🔥 LOGIC GIÁ MỚI: Ưu tiên Sale Price ---
             price = row.get('price', 0)
             sale_price = row.get('sale_price', 0)
-            
-            # Logic hiển thị: Nếu có giá sale và giá sale < giá gốc
             if sale_price and sale_price > 0 and sale_price < price:
                 price_display = f"{sale_price:,}đ (Gốc: {price:,}đ)"
             else:
                 price_display = f"{price:,}đ"
-            # -------------------------------------------
 
             full_text_str = str(row.get('full_text', ''))
             category_info = full_text_str.split('.')[0] if "Loại:" in full_text_str else f"Loại: {row.get('category', 'Sản phẩm')}"
 
             tags_info = ""
             if 'tags' in row and isinstance(row['tags'], list) and row['tags']:
-                tags_info = f" | Tags công dụng: {', '.join(row['tags'])}"
+                tags_info = f" | Tags: {', '.join(row['tags'])}"
 
             item_str = (
-                f"- SẢN PHẨM: {row['name']} | "
+                f"- TÊN SP: {row['name']} | "
                 f"{category_info} | "
-                f"Giá: {price_display} | "  # <-- Dùng biến price_display đã xử lý
+                f"Giá: {price_display} | "
                 f"Kho: {row['stock_quantity']}"
                 f"{tags_info} | " 
                 f"Mô tả: {short_desc}"
@@ -348,21 +348,23 @@ class ShopRAGMongo:
         
         context = "\n".join(context_list)
         
-        # --- LOGIC FILTER ĐỘNG VẬT ---
+        # --- PROMPT XỬ LÝ LINH HOẠT TỪ ĐỒNG NGHĨA ---
         animal_instruction = ""
         if animal_type:
             animal_instruction = f"""
-            🚨 YÊU CẦU VỀ ĐỘNG VẬT:
-            - Khách hỏi về: {animal_type.upper()}.
-            - CHỈ giới thiệu sản phẩm dành cho {animal_type}.
-            - Nếu sản phẩm trong danh sách là dành cho loài khác -> Trả lời: "Hiện shop chưa có sản phẩm {animal_type} của hãng này."
+            🚨 QUY TẮC ĐỐI TƯỢNG ({animal_type.upper()}):
+            - Khách hỏi về {animal_type}.
+            - Tuy nhiên, hãy hiểu linh hoạt:
+              1. Nếu khách hỏi "GIƯỜNG" -> Sản phẩm "Ổ ĐỆM", "NỆM", "NHÀ CÂY" là phù hợp.
+              2. Nếu khách hỏi "SỮA" -> Có thể là "Sữa bột" (Thức ăn) hoặc "Sữa tắm" (Vệ sinh). Hãy giới thiệu cả hai nếu có.
+              3. Phụ kiện (Vòng cổ, Balo, Túi) -> Thường dùng chung cho chó mèo, hãy giới thiệu.
+            - ĐỪNG trả lời "không có" nếu tên sản phẩm khác một chút (ví dụ "Ổ" thay vì "Giường") nhưng công dụng giống nhau.
             """
 
-        # --- PROMPT ĐÃ ĐƯỢC SIẾT CHẶT ---
         prompt = f"""
-        Bạn là nhân viên kho của TinyPaws. Bạn KHÔNG PHẢI là bác sĩ thú y.
+        Bạn là nhân viên bán hàng của TinyPaws.
         
-        DỮ LIỆU KHO HÀNG THỰC TẾ (Chỉ được trả lời dựa trên list này):
+        KHO HÀNG CÓ SẴN (Chỉ bán những gì có trong list này):
         ---------------------
         {context}
         ---------------------
@@ -370,184 +372,133 @@ class ShopRAGMongo:
         CÂU HỎI: "{query}"
         {animal_instruction}
 
-        QUY TẮC TRẢ LỜI (BẮT BUỘC TUÂN THỦ):
-        1. CHỈ giới thiệu sản phẩm có trong danh sách trên.
-
-        2. NẾU KHÁCH HỎI VỀ CHÍNH SÁCH/SO SÁNH GIÁ (không hỏi mua cụ thể):
-           - Chỉ giải thích về chất lượng, cam kết chính hãng.
-           - KHÔNG tự ý liệt kê danh sách sản phẩm nếu khách chưa yêu cầu.
-        
-        3. NẾU KHÔNG CÓ SẢN PHẨM TRONG DANH SÁCH: 
-           - Trả lời thẳng: "Dạ shop hiện chưa kinh doanh mặt hàng này ạ."
-           - TUYỆT ĐỐI KHÔNG nhắc đến tên các loại thuốc/sản phẩm bên ngoài (như Nexgard, Bravecto, Frontline...) nếu chúng không có trong kho.
-           - KHÔNG tự ý bịa ra lời khuyên y tế.
-
-        4. VỚI CÂU HỎI VỀ BỆNH LÝ (sỏi thận, ve rận, rụng lông...):
-           - Nếu có sản phẩm hỗ trợ trong kho (check Tags/Mô tả) -> Giới thiệu sản phẩm đó.
-           - LUÔN KẾT THÚC bằng câu: "Bạn nhớ tham khảo ý kiến bác sĩ thú y để đảm bảo an toàn và hiệu quả nhé!" (KHÔNG dùng icon).
-           
-        5. KHÔNG dùng biểu tượng 🐾 trong câu trả lời.
-        6. Trả lời ngắn gọn, tập trung vào giá và tồn kho.
+        YÊU CẦU TRẢ LỜI:
+        1. Dựa vào danh sách trên, tìm sản phẩm phù hợp nhất với ý định của khách (Thức ăn, Giường, Sữa, Dây dắt...).
+        2. Nếu tìm thấy sản phẩm có tên hoặc công dụng tương đương (VD: Khách tìm 'Giường' mà kho có 'Ổ đệm'), HÃY GIỚI THIỆU.
+        3. Nếu tìm thấy "Sữa", hãy nói rõ là sữa tắm hay sữa uống.
+        4. Chỉ trả lời "Không có" khi danh sách trống rỗng.
+        5. KHÔNG dùng icon 🐾.
         """
         
         return self.llm_generate_with_retry(prompt, max_retries=2)
 
-    def chat(self, query, history=None, k=8):
+    def chat(self, query, history=None, k=12):
         start = time.time()
         query_lower = query.lower()
-        import re 
+        import re
 
-        # --- 1. BỘ LỌC Ý ĐỊNH GẶP NHÂN VIÊN / KHIẾU NẠI (QUAN TRỌNG) ---
-        support_keywords = [
-            "gặp nhân viên", "nói chuyện với người", "chat với admin", "tư vấn trực tiếp",
-            "gặp tư vấn viên", "gặp người thật", "khiếu nại", "đơn hàng", "bom hàng",
-            "hoàn tiền", "đổi trả", "ship lâu", "chưa nhận được", "giao sai", "giao chưa",
-            "nhân viên hỗ trợ", "liên hệ shop", "alo shop", "chủ shop", "gặp admin"
-        ]
-        
-        for kw in support_keywords:
-            if kw in query_lower:
-                return {
-                    "response": "Dạ vấn đề này cần nhân viên hỗ trợ trực tiếp ạ. Bạn vui lòng nhấn nút **'Liên hệ nhân viên hỗ trợ'** bên dưới để chat với Admin nhé! 👇",
-                    "sources": [],
-                    "fallback": True, # ⭐ QUAN TRỌNG: Phải return True
-                    "processing_time": round(time.time() - start, 2),
-                    "max_similarity": 1.0
-                }
-
-        # --- 2. XỬ LÝ CÂU HỎI THÔNG TIN CHUNG & NHẠY CẢM ---
-        general_info = {
-            "giờ": "TinyPaws mở cửa từ 9:00 sáng đến 9:00 tối tất cả các ngày trong tuần!",
-            "mở cửa": "TinyPaws mở cửa từ 9:00 sáng đến 9:00 tối tất cả các ngày trong tuần!",
-            "địa chỉ": "TinyPaws có địa chỉ tại: Lạc Long Quân, Điện Dương, Điện Bàn, Quảng Nam nha!",
-            "ở đâu": "TinyPaws có địa chỉ tại: Lạc Long Quân, Điện Dương, Điện Bàn, Quảng Nam nha!",
-            "sđt": "Hotline của shop là: 0765234567.",
-            "điện thoại": "Hotline của shop là: 0765234567.",
-
-            "lừa đảo": "TinyPaws cam kết là cửa hàng uy tín, có địa chỉ rõ ràng và giấy phép kinh doanh đầy đủ. Bạn có thể ghé trực tiếp shop tại Quảng Nam để kiểm tra hàng nha!",
-            "uy tín": "TinyPaws luôn đặt uy tín lên hàng đầu với cam kết hàng chính hãng 100%, date mới và chính sách đổi trả rõ ràng!",
-            "có thật không": "TinyPaws là shop thật 100% ạ! Bạn có thể xem đánh giá trên Fanpage hoặc ghé trực tiếp cửa hàng nhé.",
-
-            "đắt": "Dạ 'Tiền nào của nấy' ạ. TinyPaws cam kết chỉ bán hàng Chính Hãng, nguồn gốc rõ ràng và được bảo quản trong môi trường máy lạnh 24/7 để đảm bảo dinh dưỡng tốt nhất cho bé. Rẻ hơn chút nhưng rủi ro hàng giả/kém chất lượng thì tội bé lắm ạ!",
-            "rẻ hơn": "Dạ giá bên em luôn đi kèm với cam kết Chất Lượng & Hậu Mãi. Hàng tại TinyPaws là hàng công ty chính ngạch, date xa và được bảo hành đổi trả nếu có lỗi của nhà sản xuất.",
-            "tại sao": "Dạ giá sản phẩm phụ thuộc vào nguồn nhập và quy trình bảo quản ạ. TinyPaws cam kết hàng chuẩn Auth, không bán hàng trôi nổi để đảm bảo sức khỏe cho các bé!"
-        }
-        
-        for key, answer in general_info.items():
-            if key in query_lower:
-                if key == "tại sao" and "đắt" not in query_lower and "giá" not in query_lower:
-                    continue 
-                return { "response": answer, "sources": [], "fallback": False, "processing_time": 0, "max_similarity": 1.0 }
-
-        # --- 3. XỬ LÝ NGỮ CẢNH LỊCH SỬ ---
-        context_query = query_lower
-        recent_history = []
-        if history and len(history) > 0:
-            recent_history = history[-6:] 
-            recent_user_turns = [item["content"] for item in recent_history if item["role"] == "user"]
-            if recent_user_turns:
-                full_context = " ".join(recent_user_turns) + " " + query_lower
-                context_query = full_context.lower()
-
-        # Phát hiện động vật
-        animal_type = None
-        meo_pattern = r'\b(mèo|meo|cat|kitten)\b'
-        cho_pattern = r'\b(chó|cho|dog|puppy|poodle|golden|corgi|husky|beagle)\b'
-        
-        if re.search(meo_pattern, context_query):
-            animal_type = "Mèo"
-        elif re.search(cho_pattern, context_query):
-            if "mèo" not in context_query and "meo" not in context_query:
-                animal_type = "Chó"
-
-        # --- 4. TÌM KIẾM VÀ LỌC (RAG) ---
-        relevant, scores = self.find_relevant_products(context_query, k)
-        max_score = float(max(scores)) if len(scores) else 0.0
-        
-        GREETING_KEYWORDS = ["hi", "hello", "chào", "alo", "ơi", "bot", "shop", "ad", "admin", "hỗ trợ"]
-        is_greeting = any(kw in query_lower for kw in GREETING_KEYWORDS)
-
-        if not relevant.empty:
-            # --- A. BỘ LỌC DANH MỤC CỨNG ---
-            category_rules = {
-                "đồ chơi": ["Đồ chơi", "Phụ kiện", "Dụng cụ"],
-                "nhà cây": ["Đồ chơi", "Phụ kiện", "Chuồng"],
-                "cat tree": ["Đồ chơi", "Phụ kiện"],
-                "thức ăn": ["Thức ăn", "Hạt", "Pate", "Bánh thưởng", "Súp"],
-                "hạt": ["Thức ăn", "Hạt"],
-                "pate": ["Thức ăn", "Pate"],
-                "bánh thưởng": ["Thức ăn", "Bánh thưởng"],
-                "thuốc": ["Thuốc", "Y tế", "Chăm sóc sức khỏe", "Dinh dưỡng"],
-                "trị ve": ["Thuốc", "Y tế", "Chăm sóc sức khỏe", "Vệ sinh"],
-                "sữa tắm": ["Vệ sinh", "Mỹ phẩm"],
-                "cát": ["Vệ sinh", "Cát vệ sinh"]
-            }
-            
-            detected_categories = []
-            for keyword, valid_cats in category_rules.items():
-                if keyword in query_lower:
-                    detected_categories.extend(valid_cats)
-            
-            if detected_categories:
-                def check_category_match(row):
-                    full_txt = str(row.get('full_text', '')).lower()
-                    cat_col = str(row.get('category', '')).lower()
-                    return any(t.lower() in cat_col or f"loại: {t.lower()}" in full_txt for t in detected_categories)
-
-                filtered_relevant = relevant[relevant.apply(check_category_match, axis=1)]
-                
-                if not filtered_relevant.empty or "thuốc" in query_lower or "trị ve" in query_lower:
-                    relevant = filtered_relevant
-
-        if not relevant.empty:
-            # --- B. BỘ LỌC THƯƠNG HIỆU ---
-            brand_mapping = {
-                "anf": ["anf", "a.n.f"], "royal canin": ["royal canin", "royal", "canin"],
-                "ganador": ["ganador"], "whiskas": ["whiskas"], "pedigree": ["pedigree"],
-                "pro plan": ["pro plan", "proplan"], "doggyman": ["doggyman"],
-                "smartheart": ["smartheart"], "me-o": ["me-o", "meo"], "petq": ["petq"]
-            }
-            
-            detected_brand_key = None
-            for brand_key, aliases in brand_mapping.items():
-                for alias in aliases:
-                    if re.search(r'\b' + re.escape(alias) + r'\b', context_query, re.IGNORECASE):
-                        detected_brand_key = brand_key
-                        break
-                if detected_brand_key: break
-            
-            if detected_brand_key:
-                brand_in_db = detected_brand_key in self.available_brands
-                if not brand_in_db:
-                      return { "response": f"Xin lỗi, hiện TinyPaws chưa có sản phẩm thương hiệu **{detected_brand_key.upper()}** trong kho.", "sources": [], "fallback": True, "processing_time": 0, "max_similarity": 0.0 }
-                
-                brand_filtered = relevant[relevant["full_text"].str.contains(detected_brand_key, case=False, na=False)]
-                if not brand_filtered.empty:
-                    relevant = brand_filtered
-                else:
-                    return { "response": f"Sản phẩm thương hiệu **{detected_brand_key.upper()}** hiện đang hết hàng ạ.", "sources": [], "fallback": True, "processing_time": 0, "max_similarity": 0.0 }
-
-        # --- 5. KIỂM TRA KẾT QUẢ CUỐI CÙNG ---
-        if relevant.empty or max_score < self.similarity_threshold:
-            if is_greeting:
-                greeting_prompt = f"""
-                Người dùng: "{query}"
-                Bạn là trợ lý của TinyPaws. Hãy chào thân thiện và giới thiệu shop có bán thức ăn, phụ kiện, đồ chơi cho thú cưng.
-                """
-                return { "response": self.llm_generate_with_retry(greeting_prompt), "sources": [], "fallback": False, "processing_time": round(time.time() - start, 2), "max_similarity": max_score }
-
-            # 🔥 QUAN TRỌNG: Nếu tìm nát nước vẫn không ra sản phẩm -> Gợi ý gặp Admin
+        # ========== 1. SUPPORT ==========
+        if any(k in query_lower for k in [
+            "gặp nhân viên", "chat với admin", "tư vấn trực tiếp",
+            "khiếu nại", "đơn hàng", "bom hàng", "liên hệ shop"
+        ]):
             return {
-                "response": "Dạ em tìm trong kho thì chưa thấy thông tin phù hợp ạ. 😿\nBạn có muốn **chat trực tiếp với nhân viên** để được tư vấn kỹ hơn không?",
+                "response": "Dạ vấn đề này cần nhân viên hỗ trợ trực tiếp ạ. Bạn vui lòng nhấn **Liên hệ nhân viên** bên dưới nhé!",
                 "sources": [],
-                "fallback": True, # <-- Bật cờ fallback để hiện nút
+                "fallback": True,
+                "processing_time": 0,
+                "max_similarity": 1.0
+            }
+
+        # ========== 2. GENERAL INFO ==========
+        if "giờ" in query_lower:
+            return {"response": "TinyPaws mở cửa từ 9:00 đến 21:00 mỗi ngày ạ.", "sources": [], "fallback": False, "max_similarity": 1.0}
+        if "địa chỉ" in query_lower:
+            return {"response": "TinyPaws ở Lạc Long Quân, Điện Dương, Điện Bàn, Quảng Nam ạ.", "sources": [], "fallback": False, "max_similarity": 1.0}
+        if "sđt" in query_lower or "số điện thoại" in query_lower:
+            return {"response": "Hotline TinyPaws: 0765 234 567 ạ.", "sources": [], "fallback": False, "max_similarity": 1.0}
+
+        # ========== 3. INTENT DETECTION ==========
+        def detect_intent(q):
+            if "sữa" in q:
+                if any(k in q for k in ["bột", "uống", "ăn", "dinh dưỡng", "mèo con", "kitten"]):
+                    return "MILK_DRINK"
+                return "MILK_CARE"
+
+            if any(k in q for k in ["đồ chơi", "toy", "cần câu", "bóng", "cá giả"]):
+                return "TOY"
+
+            if any(k in q for k in ["vòng cổ", "dây dắt", "balo", "túi", "giường", "ổ", "nệm"]):
+                return "ACCESSORY"
+
+            if any(k in q for k in ["cát", "thảm", "vệ sinh", "khay"]):
+                return "HYGIENE"
+
+            if any(k in q for k in ["hạt", "pate", "thức ăn", "bánh thưởng"]):
+                return "FOOD"
+
+            return "GENERAL"
+
+        intent = detect_intent(query_lower)
+
+        # ========== 4. CONTEXT QUERY ==========
+        context_query = query_lower
+        if history:
+            recent = " ".join(h["content"] for h in history[-5:] if h["role"] == "user")
+            context_query = f"{recent} {query_lower}".lower()
+
+        # ========== 5. RETRIEVAL ==========
+        relevant, scores = self.find_relevant_products(context_query, k)
+        max_score = float(max(scores)) if scores else 0.0
+
+        # ========== 6. INTENT FILTER ==========
+        if not relevant.empty:
+
+            def match_intent(row):
+                text = f"{row.get('name','')} {row.get('description','')} {row.get('full_text','')}".lower()
+
+                if intent == "MILK_DRINK":
+                    return "sữa" in text and not any(k in text for k in ["tắm", "dầu gội", "vệ sinh"])
+
+                if intent == "MILK_CARE":
+                    return any(k in text for k in ["sữa", "tắm", "dầu gội"])
+
+                if intent == "ACCESSORY":
+                    return any(k in text for k in [
+                        "vòng cổ", "dây dắt", "balo", "túi", "giường", "ổ", "nệm"
+                    ])
+
+                if intent == "TOY":
+                    return any(k in text for k in ["đồ chơi", "toy", "cần câu", "bóng", "cá giả", "interactive"])
+
+                if intent == "HYGIENE":
+                    return any(k in text for k in ["cát", "thảm", "vệ sinh", "khay"])
+
+                if intent == "FOOD":
+                    return any(k in text for k in ["hạt", "pate", "thức ăn", "bánh"])
+
+                return True
+
+            filtered = relevant[relevant.apply(match_intent, axis=1)]
+            if not filtered.empty:
+                relevant = filtered
+
+        # ========== 7. EMPTY HANDLING ==========
+        if relevant.empty or max_score < self.similarity_threshold:
+            intent_msg = {
+                "MILK_DRINK": "Dạ hiện tại TinyPaws **chưa có sữa bột dinh dưỡng cho mèo con** ạ.",
+                "MILK_CARE": "Dạ hiện tại bên em chưa có sản phẩm sữa tắm phù hợp ạ.",
+                "ACCESSORY": "Dạ hiện tại bên em chưa có phụ kiện đúng loại bạn cần ạ.",
+                "TOY": "Dạ hiện tại bên em chưa có đồ chơi đúng yêu cầu bạn hỏi ạ.",
+                "HYGIENE": "Dạ hiện tại bên em chưa có sản phẩm vệ sinh phù hợp ạ.",
+                "FOOD": "Dạ hiện tại bên em chưa có loại thức ăn này trong kho ạ."
+            }
+
+            return {
+                "response": intent_msg.get(intent, "Dạ hiện tại bên em chưa có sản phẩm phù hợp ạ."),
+                "sources": [],
+                "fallback": False,
                 "processing_time": round(time.time() - start, 2),
                 "max_similarity": max_score
             }
 
-        # --- 6. TẠO CÂU TRẢ LỜI ---
+        # ========== 8. FINAL ANSWER ==========
+        animal_type = None
+        if re.search(r'\b(mèo|meo|cat|kitten)\b', context_query): animal_type = "Mèo"
+        elif re.search(r'\b(chó|cho|dog|puppy)\b', context_query): animal_type = "Chó"
+
         answer = self.generate_answer(query, relevant, animal_type)
-        docs = relevant[["_id", "name", "description", "price", "stock_quantity"]].replace({np.nan: None}).to_dict("records")
+        docs = relevant[["_id", "name", "description", "price", "stock_quantity"]].to_dict("records")
 
         return {
             "response": answer,
@@ -568,18 +519,13 @@ class ShopRAGMongo:
     
     def start_change_stream_watcher(self):
         print("Theo dõi thay đổi MongoDB (auto reload)...")
-        if self.db_collection is None:
-            print("Không thể theo dõi, chưa kết nối MongoDB.")
-            return
+        if self.db_collection is None: return
 
         try:
             self.db_client.admin.command('hello')
-            server_info = self.db_client.server_info()
-            version = server_info.get('version', '0.0.0')
-            
             print("Change Streams được hỗ trợ.")
-        except Exception as e:
-            print(f"Change Streams không được hỗ trợ: {e}. Sử dụng polling thay thế.")
+        except:
+            print("Change Streams không hỗ trợ. Dùng polling.")
             self.start_polling_watcher() 
             return
 
@@ -587,46 +533,22 @@ class ShopRAGMongo:
             try:
                 with self.db_collection.watch(full_document='updateLookup') as stream:
                     for change in stream:
-                        print(f"MongoDB change detected: {change['operationType']}")
                         if change['operationType'] in ['insert', 'update', 'replace', 'delete']:
                             self.reload_index()
-            except Exception as e:
-                print(f"Lỗi Change Stream watcher: {e}")
-                print("Chuyển sang polling mode...")
-                self.start_polling_watcher()
+            except: self.start_polling_watcher()
 
-        watcher_thread = Thread(target=watch_changes, daemon=True)
-        watcher_thread.start()
-        print("Watcher thread started (Change Stream supported).")
+        Thread(target=watch_changes, daemon=True).start()
     
-    # THÊM POLLING WATCHER (cho MongoDB local)
     def start_polling_watcher(self):
-        """
-        Kiểm tra số lượng sản phẩm mỗi 60 giây.
-        Nếu có thay đổi → Rebuild index.
-        """
-        import threading
-        
         def poll_changes():
             last_count = self.db_collection.count_documents({})
-            print(f"Bắt đầu polling (hiện có {last_count} sản phẩm)")
-            
             while True:
                 try:
-                    time.sleep(60)  # Kiểm tra mỗi 60 giây
+                    time.sleep(60)
                     current_count = self.db_collection.count_documents({})
-                    
                     if current_count != last_count:
-                        print(f"Phát hiện thay đổi: {last_count} → {current_count} sản phẩm")
-                        print("Đang rebuild index...")
                         self.reload_index()
                         last_count = current_count
-                        print("Rebuild hoàn tất!")
-                        
-                except Exception as e:
-                    print(f"Lỗi polling: {e}")
-                    time.sleep(60)
+                except: time.sleep(60)
         
-        poll_thread = threading.Thread(target=poll_changes, daemon=True)
-        poll_thread.start()
-        print("Polling watcher started (kiểm tra mỗi 60 giây)")
+        Thread(target=poll_changes, daemon=True).start()

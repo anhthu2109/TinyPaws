@@ -41,7 +41,6 @@ const Footer = () => {
                             <li><Link to="/products/category/meo" className="text-[14px] text-gray-300 hover:text-[#ff5252] transition">Sản phẩm cho Mèo</Link></li>
                             <li><Link to="/phu-kien" className="text-[14px] text-gray-300 hover:text-[#ff5252] transition">Phụ kiện</Link></li>
                             <li><Link to="/cham-soc" className="text-[14px] text-gray-300 hover:text-[#ff5252] transition">Chăm sóc sức khỏe</Link></li>
-                            <li><Link to="/uu-dai" className="text-[14px] text-gray-300 hover:text-[#ff5252] transition">Ưu đãi</Link></li>
                         </ul>
                     </div>
 
@@ -65,13 +64,13 @@ const Footer = () => {
                             <li className="flex items-start gap-3">
                                 <FaMapMarkerAlt className="text-[#ff5252] mt-1 flex-shrink-0" />
                                 <span className="text-[14px] text-gray-300">
-                                    123 Đường ABC, Quận 1, TP. Hồ Chí Minh
+                                    Đường Lạc Long Quân, Hà My Đông B, Điện Bàn, Quãng Nam
                                 </span>
                             </li>
                             <li className="flex items-center gap-3">
                                 <FaPhone className="text-[#ff5252] flex-shrink-0" />
                                 <a href="tel:1800-1234" className="text-[14px] text-gray-300 hover:text-[#ff5252] transition">
-                                    Hotline: 1800-1234
+                                    Hotline: 0765256037
                                 </a>
                             </li>
                             <li className="flex items-center gap-3">

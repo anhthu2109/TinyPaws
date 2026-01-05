@@ -9,7 +9,6 @@ import Footer from './components/Footer';
 import Home from './Pages/Home';
 import Blog from './Pages/Blog';
 import Contact from './Pages/Contact';
-import Deals from './Pages/Deals';
 import ProductDetail from './Pages/ProductDetail';
 import ProductList from './Pages/ProductList';
 import SearchResults from './Pages/SearchResults';
@@ -65,7 +64,6 @@ function PublicRoutes() {
           <Route path="/" element={<Home />} />
           <Route path="/blog" element={<Blog />} />
           <Route path="/lien-he" element={<Contact />} />
-          <Route path="/uu-dai" element={<Deals />} />
 
           {/* Product Routes */}
           <Route path="/products" element={<ProductList />} />

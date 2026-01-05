@@ -12,13 +12,15 @@ const BRAND_PREVIEW_LIMIT = 5;
 const TAG_PREVIEW_LIMIT = 10;
 
 const brandOptions = {
-    cho: ['Royal Canin','Goodies', 'Orgo', 'SmartHeart', 'Ganador', 'ANF', 'Zenith', 'Pedigree', 'DoggyMan'],
+    cho: ['Royal Canin','Goodies', 'Orgo', 'SmartHeart', 'ANF', 'Zenith', 
+            'Pedigree', 'DoggyMan', 'DrVET', 'Bioline', 'Dr.Kyan'],
 
-    meo: ['Royal Canin', 'Whiskas', 'Me-O', 'Silver Spoon', 'Zoi Cat', 'Ciao', 'PetQ', 'MRVET', 'Wanpy '],
+    meo: ['Royal Canin', 'Zenith', 'Silver Spoon', 'Ciao', 'PetQ', 'MRVET',
+            'Wanpy ', 'DrVET', 'ANF', 'Dr.Kyan'],
 
-    'san-pham-ve-sinh': ['Yu', 'Maneki Neko'],
+    'san-pham-ve-sinh': ['Yu', 'Dorrikey', 'KANOO', 'Borammy'],
 
-    'ca-cho-va-meo': ['Bioline', 'TaoTaoPets', 'Shizuka']
+    'ca-cho-va-meo': ['Bioline', 'TaoTaoPets', 'DrVET', 'Dr.Kyan']
 };
 
 const normalizeTarget = (targetValue) => {
@@ -192,7 +194,7 @@ const ProductList = () => {
                             const categoryMap = {
                                 'thuc-an': 'Thức ăn',
                                 'phu-kien': 'Phụ kiện',
-                                've-sinh': 'Vệ sinh & Làm đẹp',
+                                've-sinh': 'Chăm sóc & Vệ sinh',
                                 'do-choi': 'Đồ chơi'
                             };
                             

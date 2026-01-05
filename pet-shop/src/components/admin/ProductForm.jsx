@@ -26,7 +26,7 @@ const ProductForm = ({
     const [primaryCategories] = useState([
         { id: 'thuc-an', name: 'Thức ăn' },
         { id: 'phu-kien', name: 'Phụ kiện' },
-        { id: 'san-pham-ve-sinh', name: 'Vệ sinh & Làm đẹp' },
+        { id: 'san-pham-ve-sinh', name: 'Chăm sóc & Vệ sinh' },
         { id: 'do-choi', name: 'Đồ chơi' }
     ]);
 
@@ -37,14 +37,15 @@ const ProductForm = ({
     ]);
 
     const [brandOptions] = useState({
-        cho: ['Royal Canin', 'Goodies', 'Orgo', 'SmartHeart', 'Ganador', 'Pawise', 'Natural Core', 'ANF', 'Zenith',
-            'Pedigree', 'DoggyMan', 'Kong'],
+        cho: ['Royal Canin','Goodies', 'Orgo', 'SmartHeart', 'ANF', 'Zenith', 
+                'Pedigree', 'DoggyMan', 'DrVET', 'Bioline', 'Dr.Kyan'],
 
-        meo: ['Royal Canin', 'Whiskas', 'Me-O', 'Silver Spoon', 'Zoi Cat', 'Ciao', 'PetQ', 'MRVET', 'Wanpy ', 'Shizuka'],
+        meo: ['Royal Canin', 'Zenith', 'Silver Spoon', 'Ciao', 'PetQ', 'MRVET', 
+                'Shizuka', 'DrVET', 'ANF', 'Dr.Kyan'],
 
         'san-pham-ve-sinh': ['Yu', 'Dorrikey', 'KANOO', 'Borammy'],
 
-        'ca-cho-va-meo': ['Pawise', 'M-Pets', 'Bioline', 'TaoTaoPets']
+        'ca-cho-va-meo': ['Dr.Kyan', 'Bioline', 'TaoTaoPets', 'DrVET']
     });
 
     const [selectedPrimaryCategory, setSelectedPrimaryCategory] = useState('');
@@ -82,7 +83,7 @@ const ProductForm = ({
             'Phụ kiện cho chó': { primary: 'phu-kien', target: 'cho' },
             'Phụ kiện cho mèo': { primary: 'phu-kien', target: 'meo' },
             'Phụ kiện cho chó và mèo': { primary: 'phu-kien', target: 'ca-cho-va-meo' },
-            'Vệ sinh & Làm đẹp': { primary: 'san-pham-ve-sinh', target: '' },
+            'Chăm sóc & Vệ sinh': { primary: 'san-pham-ve-sinh', target: '' },
             'Sản phẩm vệ sinh': { primary: 'san-pham-ve-sinh', target: '' },
             'Sản phẩm vệ sinh cho chó': { primary: 'san-pham-ve-sinh', target: 'cho' },
             'Sản phẩm vệ sinh cho mèo': { primary: 'san-pham-ve-sinh', target: 'meo' },
@@ -139,7 +140,7 @@ const ProductForm = ({
             const categoryToId = {
                 'Thức ăn': 'thuc-an',
                 'Phụ kiện': 'phu-kien',
-                'Vệ sinh & Làm đẹp': 'san-pham-ve-sinh',
+                'Chăm sóc & Vệ sinh': 'san-pham-ve-sinh',
                 'Sản phẩm vệ sinh': 'san-pham-ve-sinh',
                 'Đồ chơi': 'do-choi'
             };

@@ -187,6 +187,7 @@ const getAdminProducts = async (req, res) => {
         const {
             search,
             category,
+            target,
             status,
             stock,
             sortBy = 'createdAt',
@@ -244,6 +245,16 @@ const getAdminProducts = async (req, res) => {
                     query.stock_quantity = { $gt: 0, $lte: 10 };
                     break;
             }
+        }
+
+        // Target filter
+        if (target && target !== 'all') {
+            const targetMap = {
+                'cho': 'dog',
+                'meo': 'cat',
+                'ca-cho-va-meo': 'both'
+            };
+            query.target = targetMap[target];
         }
 
         const skip = (parseInt(page) - 1) * parseInt(limit);

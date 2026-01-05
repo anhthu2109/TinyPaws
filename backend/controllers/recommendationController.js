@@ -11,9 +11,10 @@ const ACTION_WEIGHTS = {
     ordered: 6
 };
 
-const W_CB = 0.4;
-const W_CF = 0.4;
-const W_POP = 0.2;
+const W_CB = 0.35;      
+const W_CF = 0.35;      
+const W_POP = 0.2;      
+const W_RECENCY = 0.1;  
 
 const getRecommendations = async (req, res) => {
     try {
@@ -88,12 +89,12 @@ const getRecommendations = async (req, res) => {
 
         // Get top categories and tags by frequency
         const topCategories = Object.entries(categoryFrequency)
-            .sort(([,a], [,b]) => b - a)
+            .sort(([, a], [, b]) => b - a)
             .slice(0, 3)
             .map(([catId]) => catId);
 
         const topTags = Object.entries(tagFrequency)
-            .sort(([,a], [,b]) => b - a)
+            .sort(([, a], [, b]) => b - a)
             .slice(0, 5)
             .map(([tag]) => tag);
 
@@ -132,35 +133,27 @@ const getRecommendations = async (req, res) => {
                 .lean();
         }
 
-        // Mix and deduplicate
-        const allCandidates = [...shortTermCandidates, ...longTermCandidates];
-        const uniqueCandidates = allCandidates.filter((product, index, arr) => 
-            arr.findIndex(p => p._id.toString() === product._id.toString()) === index
-        );
-
-        if (!uniqueCandidates.length) {
-            return await getPopularProducts(res, limit);
-        }
-
-        // Score candidates with enhanced algorithm
-        const scored = uniqueCandidates.map(item => {
+        const scoreCandidate = (item) => {
             const id = item._id.toString();
             let cb = 0, cf = 0, pop = 0, recency = 0;
 
             // Content-Based (category + tag matching)
             if (topCategories.includes(item.category?._id?.toString())) cb += 1;
             if (recentCategories.includes(item.category?._id?.toString())) cb += 0.5;
-            
+
             const tagMatch = (item.tags || []).filter(t => topTags.includes(t)).length;
             const recentTagMatch = (item.tags || []).filter(t => recentTags.includes(t)).length;
             cb += tagMatch / Math.max(topTags.length, 1);
             cb += recentTagMatch / Math.max(recentTags.length, 1) * 0.5;
             cb = Math.min(cb / 4, 1); // Normalize
 
-            // Collaborative Filtering (implicit feedback)
+            // Collaborative Filtering
+            if (viewIds.includes(id)) cf += ACTION_WEIGHTS.viewed;
             if (wishlistIds.includes(id)) cf += ACTION_WEIGHTS.wishlist;
             if (cartIds.includes(id)) cf += ACTION_WEIGHTS.cart;
-            cf = Math.min(cf / 8, 1); 
+            if (orderIds.includes(id)) cf += ACTION_WEIGHTS.ordered;
+            const maxCf = ACTION_WEIGHTS.viewed + ACTION_WEIGHTS.wishlist + ACTION_WEIGHTS.cart + ACTION_WEIGHTS.ordered;
+            cf = Math.min(cf / maxCf, 1);
 
             // Popularity
             pop = Math.min((item.sales_count || 0) / 20, 1);
@@ -168,17 +161,52 @@ const getRecommendations = async (req, res) => {
             const daysSinceUpdate = (Date.now() - new Date(item.updatedAt || item.createdAt)) / (1000 * 60 * 60 * 24);
             recency = Math.max(0, 1 - daysSinceUpdate / 90); // Decay over 90 days
 
-            const finalScore = (W_CB * cb) + (W_CF * cf) + (W_POP * pop) + (0.1 * recency);
+            const finalScore = (W_CB * cb) + (W_CF * cf) + (W_POP * pop) + (W_RECENCY * recency);
 
             return {
                 ...item,
                 recommendation_score: finalScore
             };
-        });
+        };
 
-        const top = scored
-            .sort((a, b) => b.recommendation_score - a.recommendation_score)
-            .slice(0, limit);
+        const scoredShort = (shortTermCandidates || [])
+            .map(scoreCandidate)
+            .sort((a, b) => b.recommendation_score - a.recommendation_score);
+
+        const scoredLong = (longTermCandidates || [])
+            .map(scoreCandidate)
+            .sort((a, b) => b.recommendation_score - a.recommendation_score);
+
+        const top = [];
+        const seen = new Set();
+        let shortIdx = 0;
+        let longIdx = 0;
+        const shortBatch = 1;
+        const longBatch = 1;
+
+        while (top.length < limit && (shortIdx < scoredShort.length || longIdx < scoredLong.length)) {
+            for (let i = 0; i < shortBatch && top.length < limit && shortIdx < scoredShort.length; i++) {
+                const candidate = scoredShort[shortIdx++];
+                const cid = candidate._id.toString();
+                if (seen.has(cid)) {
+                    i--;
+                    continue;
+                }
+                seen.add(cid);
+                top.push(candidate);
+            }
+
+            for (let i = 0; i < longBatch && top.length < limit && longIdx < scoredLong.length; i++) {
+                const candidate = scoredLong[longIdx++];
+                const cid = candidate._id.toString();
+                if (seen.has(cid)) {
+                    i--;
+                    continue;
+                }
+                seen.add(cid);
+                top.push(candidate);
+            }
+        }
 
         if (!top.length) {
             return await getPopularProducts(res, limit);
@@ -230,7 +258,7 @@ const trackProductView = async (req, res) => {
             });
         }
 
-        // Kiểm tra xem đã view trong vòng 1 giờ chưa (tránh spam)
+        // Kiểm tra xem đã view trong vòng 1 giờ chưa
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
         const existingView = await ProductView.findOne({
             user: userId,
@@ -310,7 +338,7 @@ const removeFromWishlist = async (req, res) => {
 
         const updated = await Wishlist.findOneAndUpdate(
             { user: userId, product: productId },
-            { 
+            {
                 status: 'removed',
                 removed_at: new Date()
             },
@@ -388,9 +416,9 @@ const getCart = async (req, res) => {
     try {
         const { userId } = req.params;
 
-        const cartItems = await Cart.find({ 
+        const cartItems = await Cart.find({
             user: userId,
-            status: 'active' 
+            status: 'active'
         })
             .populate('product')
             .sort({ added_at: -1 })
@@ -419,7 +447,7 @@ const removeFromCart = async (req, res) => {
 
         const updated = await Cart.findOneAndUpdate(
             { user: userId, product: productId },
-            { 
+            {
                 status: 'removed',
                 removed_at: new Date()
             },
@@ -452,7 +480,7 @@ const getWishlist = async (req, res) => {
     try {
         const { userId } = req.params;
 
-        const wishlistItems = await Wishlist.find({ 
+        const wishlistItems = await Wishlist.find({
             user: userId,
             status: 'active'
         })
@@ -499,7 +527,7 @@ const getProductDetailRecommendations = async (req, res) => {
         const currentTarget = currentProduct.target || 'both';
 
         const similarProducts = await Product.find({
-            _id: { $ne: productId }, 
+            _id: { $ne: productId },
             is_active: true,
             $or: [
                 { category: currentCategory },
@@ -520,7 +548,7 @@ const getProductDetailRecommendations = async (req, res) => {
             .lean();
 
         if (!similarProducts.length) {
-            const fallbackProducts = await Product.find({ 
+            const fallbackProducts = await Product.find({
                 is_active: true,
                 $or: [
                     { target: currentTarget },

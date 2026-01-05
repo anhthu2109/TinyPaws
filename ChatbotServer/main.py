@@ -74,13 +74,38 @@ SHOP_KEYWORDS = [
     "shop", "cửa hàng", "địa chỉ", "vận chuyển", "ship", "giao hàng",
     "giá", "bán", "sản phẩm", "mua", "thanh toán", "khuyến mãi", "sale",
     "đổi trả", "hóa đơn", "tồn kho", "inventory", "order", "pay", "paypal",
-    "gợi ý", "có", "không"
+    "gợi ý", "có", "không",
+    # Từ khóa sản phẩm phổ biến
+    "sữa", "sua", "sữa bột", "sua bot", "sữa tắm", "thức ăn", "hạt", "pate",
+    "kitten", "puppy", "phụ kiện", "giường", "ổ", "đệm", "dây dắt", "vòng cổ",
+    "cát vệ sinh", "đồ chơi"
 ]
 
-def detect_query_type(message: str):
+PET_KEYWORDS = [
+    "chăm sóc", "bệnh", "triệt sản", "tiêu chảy", "ốm", "sốt", "tiêm",
+    "vaccine", "vắc xin", "mèo con", "chó con", "bác sĩ", "kiêng", "dinh dưỡng",
+    "chữa", "đi khám", "dấu hiệu", "cách xử lý", "cứu", "chăm mèo", "chăm chó",
+    "ve rận", "bọ chét", "tẩy giun", "nôn", "tiểu", "sỏi thận"
+]
+
+def detect_query_type(message: str, history: list | None = None):
     msg = (message or "").lower()
+    # Ưu tiên phát hiện ý định chăm sóc dựa trên câu hiện tại
+    if any(kw in msg for kw in PET_KEYWORDS):
+        return "PET"
+
     if any(kw in msg for kw in SHOP_KEYWORDS):
         return "SHOP"
+
+    if history:
+        recent_user_turns = [item.get("content", "") for item in history[-6:] if item.get("role") == "user"]
+        for turn in reversed(recent_user_turns):
+            turn_lower = turn.lower()
+            if any(kw in turn_lower for kw in PET_KEYWORDS):
+                return "PET"
+            if any(kw in turn_lower for kw in SHOP_KEYWORDS):
+                return "SHOP"
+
     return "PET"
 
 @app.post("/chat")
@@ -93,7 +118,8 @@ async def chat_endpoint(req: ChatRequest):
         }
 
     query = req.message.strip()
-    query_type = detect_query_type(query)
+    query_type = detect_query_type(query, req.history)
+
     print(f"Loại câu hỏi: {query_type} | Câu: {query}")
 
     if query_type == "SHOP":
@@ -114,7 +140,7 @@ async def reindex_shop():
     if not shop_rag:
         return {"success": False, "error": "Bot chưa sẵn sàng"}
     try:
-        print("🔄 Admin yêu cầu rebuild index...")
+        print("Admin yêu cầu rebuild index...")
         shop_rag.reload_index()
         return {"success": True, "message": "Shop index đã được rebuild thành công"}
     except Exception as e:
@@ -140,7 +166,6 @@ def root():
         "version": "2.0"
     }
 
-# ⭐ THÊM ENDPOINT MỚI: Rebuild + Xóa cache
 @app.post("/admin/rebuild/shop")
 async def rebuild_shop_from_scratch():
     """Force rebuild shop index từ đầu (xóa cache cũ)"""
@@ -148,22 +173,22 @@ async def rebuild_shop_from_scratch():
         return {"success": False, "error": "Bot chưa sẵn sàng"}
     
     try:
-        print("🔥 Đang xóa cache cũ và rebuild từ đầu...")
+        print("Đang xóa cache cũ và rebuild từ đầu...")
         
         # Xóa cache cũ
         import os
         if os.path.exists("shop_faiss.bin"):
             os.remove("shop_faiss.bin")
-            print("✅ Đã xóa shop_faiss.bin")
+            print("Đã xóa shop_faiss.bin")
         if os.path.exists("shop_cache.parquet"):
             os.remove("shop_cache.parquet")
-            print("✅ Đã xóa shop_cache.parquet")
+            print("Đã xóa shop_cache.parquet")
         
         # Rebuild từ đầu
         if shop_rag.load_data():
             shop_rag.build_index()
             shop_rag.save_cache()
-            print(f"✅ Đã rebuild index với {len(shop_rag.df)} sản phẩm")
+            print(f"Đã rebuild index với {len(shop_rag.df)} sản phẩm")
             return {
                 "success": True, 
                 "message": f"Đã rebuild thành công với {len(shop_rag.df)} sản phẩm"
@@ -172,5 +197,5 @@ async def rebuild_shop_from_scratch():
             return {"success": False, "error": "Không thể load data từ MongoDB"}
             
     except Exception as e:
-        print(f"❌ Lỗi khi rebuild: {e}")
+        print(f"Lỗi khi rebuild: {e}")
         return {"success": False, "error": str(e)}
