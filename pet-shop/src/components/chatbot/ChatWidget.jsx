@@ -99,7 +99,8 @@ const ChatWidget = () => {
   const { token, isAuthenticated, user } = useAuth(); // ⭐ Lấy user object
 
   const API_BASE_URL = CONFIG.API.BASE_URL;
-  const CHAT_SEND_URL = `${API_BASE_URL}/api/chat/send`;
+  const CHATBOT_BASE_URL = CONFIG.API.CHATBOT.BASE;
+  const CHAT_SEND_URL = `${CHATBOT_BASE_URL}${CONFIG.API.CHATBOT.CHAT}`;
   const CHAT_HISTORY_URL = `${API_BASE_URL}/api/chat/history`;
   const REQUEST_SUPPORT_URL = `${API_BASE_URL}/api/chat/request-support`;
   const MESSAGE_SEND_URL = `${API_BASE_URL}/api/messages`;
